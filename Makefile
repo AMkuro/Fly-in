@@ -47,6 +47,7 @@ clean:
 	find . -type d -name ".ruff_cache" -prune -exec rm -rf {} +; \
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +; \
 	find . -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete; \
+	find . -type f "uv.lock" -delete;
 
 lint:
 	@set -eu; \
