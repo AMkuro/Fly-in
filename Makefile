@@ -17,9 +17,9 @@ help:
 
 install:
 	@set -eu; \
-	find . -type d -name ".venv" -prune -exec rm -rf {} +; \
+	find . -type d -name $(DEFAULT_VENV_NAME) -prune -exec rm -rf {} +; \
 	echo "Creating clean virtual environment..."; \
-	python3 -m venv $(DEFAULT_VENV_NAME); \
+	python3 -m venv --system-site-packages $(DEFAULT_VENV_NAME); \
 	echo "Installing dependencies..."; \
 	$(PIP) install -r requirements.txt; \
 	echo "Install to virtualenv $(DEFAULT_VENV_NAME) Successful."
