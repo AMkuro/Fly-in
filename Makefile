@@ -7,7 +7,7 @@ MAP_ORIGIN := $(origin MAP)
 MAP ?= $(DEFAULT_MAP)
 FLAGS ?=
 
-.PHONY: help install run debug clean lint lint-strict
+.PHONY: help install run debug clean test lint lint-strict
 
 help:
 	@echo "Available targets:"
@@ -56,6 +56,14 @@ clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +; \
 	find . -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete; \
 	find . -type f -name "uv.lock" -delete;
+
+test:
+	@set -eu; \
+	if [ ! -f $(PYTHON) ]; then \
+		echo "Error: no valid virtualenv found. Run 'make install' first." >&2; \
+		exit 1; \
+	fi; \
+	$(PYTHON) -m unittest discover -s tests -v
 
 lint:
 	@set -eu; \

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from fly_in.model.map_data import Connection, MapData, Zone, ZoneType
+from fly_in.model.map_data import Connection, MapData, Zone
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,7 @@ class MapGraph:
 
     ``MapData`` keeps the parser-facing facts. ``MapGraph`` indexes those facts
     for graph operations such as pathfinding and future simulation.
+    Blocked zones remain in the topology; routing must exclude them from paths.
     """
 
     nb_drones: int
@@ -30,18 +31,14 @@ class MapGraph:
     @classmethod
     def from_map_data(cls, map_data: MapData) -> "MapGraph":
         """Build adjacency indexes from already-validated ``MapData``."""
-        cleaned_zone: dict[str, Zone] = {
-            k: v
-            for k, v in map_data.zones.items()
-            if v.zone_type != ZoneType.BLOCKED
-        }
+        zones = dict(map_data.zones)
         connections_by_name: dict[str, Connection] = {}
         connections_by_key: dict[tuple[str, str], Connection] = {}
         connections_by_zone: dict[str, list[Connection]] = {
-            zone_name: [] for zone_name in cleaned_zone
+            zone_name: [] for zone_name in zones
         }
         neighbors_by_zone: dict[str, list[str]] = {
-            zone_name: [] for zone_name in cleaned_zone
+            zone_name: [] for zone_name in zones
         }
 
         for connection in map_data.connections:
@@ -55,9 +52,9 @@ class MapGraph:
 
         return cls(
             nb_drones=map_data.nb_drones,
-            start_hub=cleaned_zone[map_data.start_hub_name],
-            end_hub=cleaned_zone[map_data.end_hub_name],
-            zones=MappingProxyType(cleaned_zone),
+            start_hub=zones[map_data.start_hub_name],
+            end_hub=zones[map_data.end_hub_name],
+            zones=MappingProxyType(zones),
             connections=tuple(map_data.connections),
             connections_by_name=MappingProxyType(connections_by_name),
             connections_by_key=MappingProxyType(connections_by_key),
