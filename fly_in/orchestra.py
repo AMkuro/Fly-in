@@ -1,4 +1,5 @@
 from fly_in.model.map_data import MapData
+from fly_in.model.map_graph import MapGraph
 from fly_in.parse.map_parser import FlyInMapParser
 
 
@@ -26,6 +27,7 @@ class FlyInApp:
 
     def _orchestra(self, map_data: MapData, use_gui: bool) -> None:
         """Run the current application flow for the parsed map."""
+        graph_model: MapGraph = MapGraph.from_map_data(map_data)
         if use_gui:
             self._open_gui(map_data)
             return
