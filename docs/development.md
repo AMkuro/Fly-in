@@ -1,9 +1,10 @@
 # Development and submission
 
 `develop` is the development branch and GitHub default branch. `main` is retained
-as historical data. `master` contains only the files selected by
-[`submission-files.txt`](../submission-files.txt); do not merge development
-history into it or edit it directly.
+as historical data. Files selected by
+[`submission-files.txt`](../submission-files.txt) are managed automatically on
+`master`; do not merge development history into it. Unexpected files on master
+are preserved and reported, as described below.
 
 The initial `master` snapshot is explicitly **unverified**. It is created before
 the project is complete at the repository owner's request. Its existence does
@@ -53,7 +54,10 @@ contract suite so it is not trusted as its own input-validation oracle.
 Checks include:
 
 - Required root files, Makefile target names, nonempty README sections and the
-  attribution/AI disclosure. Content quality and English are reviewed manually.
+  attribution/AI disclosure. The exact first-line sentence must be italicized
+  with `*` or `_` and contain one or more login names. There is no minimum text
+  length. HTML comments do not count as section content. Content quality and
+  English are reviewed manually.
 - Python syntax, class/function docstrings, and direct imports of known graph
   libraries. This is not a proof against dynamic imports or unlisted libraries.
 - Invalid parser inputs: empty maps, missing or duplicate declarations, bad
@@ -89,8 +93,32 @@ checks the remote develop head to skip obsolete runs, serializes master updates,
 and adds one commit to master's own history using a separate Git index. It does
 not change the checkout or rewrite develop history. Pushes are fast-forward
 only; a concurrent master change causes failure instead of being overwritten.
-Identical exported contents cause no commit. Each generated commit records the
-source develop SHA.
+Identical exported contents cause no commit. Each normal submission commit
+records the source develop SHA.
+
+### Unexpected files on master
+
+After the checks pass, the sync job compares master's paths with the current
+manifest. If a path is outside the manifest, it does **not** delete that file or
+apply the new candidate. It retains master's existing tree and only adds or
+updates `SUBMISSION_WARNING.md`, listing the unexpected paths. File contents,
+symlinks and modes are preserved without materializing those extra files.
+
+The job then fails with a GitHub Actions warning so the blocked update is visible.
+No email integration is configured. Repeated detection of the same paths does
+not create duplicate warning commits. A maintainer can remove unwanted files
+from master, or add genuinely required files to develop's manifest. A later
+passing run clears the warning and resumes normal updates when no extras remain.
+
+`SUBMISSION_WARNING.md` is reserved for CI and is not a deliverable. Do not
+create unrelated content at that path. Paths inside the manifest remain
+CI-managed: they are updated or removed to match the verified candidate.
+Unexpected-file checks run during the sync job, so no warning file is published
+while the preceding verification jobs are failing.
+
+`.flake8` is shared lint configuration, not a cache. It remains in the manifest
+so the submitted lint command uses the same exclusions as development. It is
+not ignored by this repository's `.gitignore`.
 
 No branch-protection rules are installed by this setup. Maintainers can still
 push manually, so enforcement here is the automated publication path, not an

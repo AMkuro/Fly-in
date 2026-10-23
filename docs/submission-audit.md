@@ -103,3 +103,21 @@ GitHub's default and local origin/HEAD both point to develop. Main is retained.
 The source/configuration preservation check compares all pre-existing tracked
 files against `26651a3`. This automation change adds files only; existing Python,
 README, requirements and Makefile contents are byte-for-byte unchanged.
+
+## Follow-up: README rules and preserving unexpected files
+
+The README check no longer uses the invented 40-character minimum. It checks
+the italicized first-line sentence with login names, required headings,
+non-placeholder section content, and the AI usage heading. Short text is
+accepted; content quality remains a manual review.
+
+The submission selector still includes `.flake8`, which is shared lint
+configuration rather than cache data. All currently implemented runtime Python
+files, the root Makefile/README/dependencies, and input maps are selected. This
+does not imply that the as-yet unimplemented simulation requirements are met.
+
+Unexpected master files are now preserved. The real workflow test covers a
+manual file and symlink, blocked publication with a warning marker, repeated
+warnings without new commits, and automatic warning removal after resolution.
+The canonical behavior is documented in
+[development.md](development.md#unexpected-files-on-master).

@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin develop
+          git fetch origin
           if [ "$(git rev-parse origin/develop)" != "$GITHUB_SHA" ]; then
             echo 'A newer develop revision exists; skipping stale submission.'
             exit 0
@@ -84,20 +84,25 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           export GIT_INDEX_FILE="$RUNNER_TEMP/submission.index"
-          git read-tree --empty
-          (
-            cd "$RUNNER_TEMP/submission"
-            GIT_DIR="$GITHUB_WORKSPACE/.git" git add --all .
-          )
-          tree=$(git write-tree)
+          parent=''
           parents=()
           if git show-ref --verify --quiet refs/remotes/origin/master; then
             parent=$(git rev-parse origin/master)
-            if [ "$tree" = "$(git rev-parse "$parent^{tree}")" ]; then
-              echo 'Submission contents already match.'
-              exit 0
-            fi
             parents=(-p "$parent")
           fi
-          commit=$(git commit-tree "$tree" "${parents[@]}" -m "submit: verified develop $GITHUB_SHA")
-          git push origin "$commit:refs/heads/master"
+          mode=$(python3 -m tools.prepare_submission "$RUNNER_TEMP/submission" --parent "$parent")
+          tree=$(git write-tree)
+          message="submit: verified develop $GITHUB_SHA"
+          if [ "$mode" = warning ]; then
+            message='warn: preserve unexpected submission files'
+          fi
+          if [ -n "$parent" ] && [ "$tree" = "$(git rev-parse "$parent^{tree}")" ]; then
+            echo 'Submission contents already match.'
+          else
+            commit=$(git commit-tree "$tree" "${parents[@]}" -m "$message")
+            git push origin "$commit:refs/heads/master"
+          fi
+          if [ "$mode" = warning ]; then
+            echo '::warning::Unexpected master files preserved. Review SUBMISSION_WARNING.md; submission update stopped.'
+            exit 1
+          fi

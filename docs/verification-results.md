@@ -185,3 +185,65 @@ Ran 1 test in 1.933s
 
 OK
 ```
+
+## Follow-up: README rules and non-destructive warnings
+
+### README and movement verifier regression
+
+Exit status: `0`
+
+```text
+test_capacity_metadata_is_honored (test_subject_verifier.MovementVerifierTests.test_capacity_metadata_is_honored)
+Allow concurrent traversal only when both capacities permit it. ... ok
+test_departures_free_capacity_on_same_turn (test_subject_verifier.MovementVerifierTests.test_departures_free_capacity_on_same_turn)
+Allow another drone into a zone vacated during the same turn. ... ok
+test_invalid_streams_are_rejected (test_subject_verifier.MovementVerifierTests.test_invalid_streams_are_rejected)
+Reject malformed, incomplete and illegal movement sequences. ... ok
+test_restricted_transit (test_subject_verifier.MovementVerifierTests.test_restricted_transit)
+Require a connection token followed by arrival on the next turn. ... ok
+test_turn_limit_and_ansi_colors (test_subject_verifier.MovementVerifierTests.test_turn_limit_and_ansi_colors)
+Count turns, while allowing terminal color escape sequences. ... ok
+test_zone_capacity_is_independent_of_link_capacity (test_subject_verifier.MovementVerifierTests.test_zone_capacity_is_independent_of_link_capacity)
+A wider connection must not allow excess zone occupancy. ... ok
+test_first_line_is_required (test_subject_verifier.ReadmeVerifierTests.test_first_line_is_required)
+Require the exact italicized sentence on the first line. ... ok
+test_sections_and_real_content_are_required (test_subject_verifier.ReadmeVerifierTests.test_sections_and_real_content_are_required)
+Reject missing headings and HTML-comment-only placeholders. ... ok
+test_short_sections_are_valid (test_subject_verifier.ReadmeVerifierTests.test_short_sections_are_valid)
+One-character text must not trigger an invented length rule. ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.009s
+
+OK
+```
+
+### Workflow preservation/warning/resolution
+
+Exit status: `0`
+
+```text
+test_sync_script (test_workflow_sync.WorkflowSyncTests.test_sync_script)
+Use the workflow's real shell instead of duplicating its logic. ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 4.488s
+
+OK
+```
+
+### Submission export regression
+
+Exit status: `0`
+
+```text
+test_export_rejects_symlinks (test_submission_export.SubmissionExportTests.test_export_rejects_symlinks)
+Do not leak a symlink target into a submission. ... ok
+test_export_uses_committed_allowlisted_files (test_submission_export.SubmissionExportTests.test_export_uses_committed_allowlisted_files)
+Exclude development/untracked files and never overwrite output. ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.604s
+
+OK
+```

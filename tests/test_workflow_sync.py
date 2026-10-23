@@ -35,6 +35,14 @@ class WorkflowSyncTests(unittest.TestCase):
             (seed / "submission-files.txt").write_text("README.md\n")
             (seed / "README.md").write_text("first candidate\n")
             (seed / "private.txt").write_text("development only\n")
+            (seed / ".gitignore").write_text("__pycache__/\n")
+            (seed / "tools").mkdir()
+            for name in (
+                "__init__.py", "export_submission.py", "prepare_submission.py",
+            ):
+                (seed / "tools" / name).write_bytes(
+                    (Path("tools") / name).read_bytes()
+                )
             self.git(seed, "add", ".")
             self.git(seed, "commit", "-qm", "fixture")
             subprocess.run(
@@ -46,7 +54,7 @@ class WorkflowSyncTests(unittest.TestCase):
             )
             source = self.git(runner, "rev-parse", "HEAD")
 
-            def publish(label: str, sha: str) -> str:
+            def publish(label: str, sha: str, expected: int = 0) -> str:
                 """Prepare a candidate and run the unchanged workflow shell."""
                 temp = root / label
                 temp.mkdir()
@@ -63,7 +71,7 @@ class WorkflowSyncTests(unittest.TestCase):
                     },
                     capture_output=True, text=True, timeout=15,
                 )
-                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.returncode, expected, result.stderr)
                 return result.stdout
 
             publish("first", source)
@@ -94,3 +102,57 @@ class WorkflowSyncTests(unittest.TestCase):
                 "second candidate",
             )
             self.assertEqual(self.git(runner, "status", "--porcelain"), "")
+
+            manual = root / "manual"
+            subprocess.run(
+                ["git", "clone", "-q", "-b", "master",
+                 str(remote), str(manual)],
+                check=True,
+            )
+            self.git(manual, "config", "user.name", "Test")
+            self.git(manual, "config", "user.email", "test@example.com")
+            (manual / "manual note.md").write_text("keep this exactly\n")
+            (manual / "manual-link").symlink_to("manual note.md")
+            self.git(manual, "add", ".")
+            self.git(manual, "commit", "-qm", "manual files")
+            self.git(manual, "push", "origin", "master")
+            (runner / "README.md").write_text("third candidate\n")
+            self.git(runner, "add", "README.md")
+            self.git(runner, "commit", "-qm", "third")
+            self.git(runner, "push", "origin", "develop")
+            third_source = self.git(runner, "rev-parse", "HEAD")
+
+            self.assertIn("::warning::", publish("warn", third_source, 1))
+            warning_commit = self.git(remote, "rev-parse", "master")
+            self.assertEqual(
+                self.git(remote, "show", "master:manual note.md"),
+                "keep this exactly",
+            )
+            self.assertEqual(
+                self.git(remote, "show", "master:manual-link"),
+                "manual note.md",
+            )
+            self.assertEqual(
+                self.git(remote, "show", "master:README.md"),
+                "second candidate",
+            )
+            warning = self.git(remote, "show", "master:SUBMISSION_WARNING.md")
+            self.assertIn("manual note.md", warning)
+            self.assertIn("manual-link", warning)
+            publish("warn-again", third_source, 1)
+            self.assertEqual(
+                self.git(remote, "rev-parse", "master"), warning_commit
+            )
+
+            self.git(manual, "pull", "--ff-only", "origin", "master")
+            self.git(manual, "rm", "manual note.md", "manual-link")
+            self.git(manual, "commit", "-qm", "resolve unexpected files")
+            self.git(manual, "push", "origin", "master")
+            publish("resolved", third_source)
+            self.assertNotIn(
+                "SUBMISSION_WARNING.md",
+                self.git(remote, "ls-tree", "--name-only", "master"),
+            )
+            self.assertEqual(
+                self.git(remote, "show", "master:README.md"), "third candidate"
+            )

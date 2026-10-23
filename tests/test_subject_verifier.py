@@ -1,10 +1,64 @@
 """Check the checker with hand-written valid and invalid movement streams."""
 
+import tempfile
 import unittest
 from pathlib import Path
 
 from fly_in.parse.map_parser import FlyInMapParser
-from tools.verify_subject import MovementVerifier
+from tools.verify_subject import MovementVerifier, SubjectVerifier
+
+
+class ReadmeVerifierTests(unittest.TestCase):
+    """Check required README structure without arbitrary text length."""
+
+    README = (
+        "*This project has been created as part of the 42 "
+        "curriculum by miwasaki*\n"
+        "\n## Description\nX\n## Instructions\nX\n"
+        "## Algorithm and Implementation Strategy\nX\n"
+        "## Visual Representation\nX\n## Resources\nX\n"
+        "### AI Usage\nX\n"
+    )
+
+    def check(self, text: str) -> None:
+        """Run the real README checker against a temporary candidate."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").write_text(text)
+            SubjectVerifier(root).check_readme()
+
+    def test_short_sections_are_valid(self) -> None:
+        """One-character text must not trigger an invented length rule."""
+        self.check(self.README)
+        self.check(self.README.replace(
+            "miwasaki*", "miwasaki, another-login*"
+        ))
+        first, rest = self.README.split("\n", 1)
+        self.check(first.replace("*", "_") + "\n" + rest)
+
+    def test_first_line_is_required(self) -> None:
+        """Require the exact italicized sentence on the first line."""
+        for text in (
+            "", "\n" + self.README, self.README.replace("*", ""),
+            self.README.replace("42 curriculum", "curriculum"),
+            self.README.replace("miwasaki", "<login1>"),
+        ):
+            with self.subTest(text=text), self.assertRaisesRegex(
+                ValueError, "attribution"
+            ):
+                self.check(text)
+
+    def test_sections_and_real_content_are_required(self) -> None:
+        """Reject missing headings and HTML-comment-only placeholders."""
+        for text in (
+            self.README.replace("## Instructions", "## Other"),
+            self.README.replace("### AI Usage", "### Other"),
+            self.README.replace(
+                "## Description\nX", "## Description\n<!-- X -->"
+            ),
+        ):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                self.check(text)
 
 
 class MovementVerifierTests(unittest.TestCase):

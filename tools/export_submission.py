@@ -24,15 +24,19 @@ class SubmissionExport:
             path, pattern.replace("**/", "")
         )
 
-    def export(self, destination: Path) -> None:
-        """Copy allowed blobs; refuse existing output and symlinks."""
+    def patterns(self) -> list[str]:
+        """Read the allowlist from this pinned commit."""
         manifest = subprocess.check_output(
             ["git", "show", f"{self.commit}:submission-files.txt"], text=True
         )
-        patterns = [
+        return [
             line.strip() for line in manifest.splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         ]
+
+    def export(self, destination: Path) -> None:
+        """Copy allowed blobs; refuse existing output and symlinks."""
+        patterns = self.patterns()
         entries = subprocess.check_output(
             ["git", "ls-tree", "-rz", self.commit]
         ).split(b"\0")

@@ -123,28 +123,7 @@ class SubjectVerifier:
         ):
             if not (self.root / filename).is_file():
                 raise ValueError(f"missing root file: {filename}")
-        readme = re.sub(
-            r"<!--[\s\S]*?-->", "",
-            (self.root / "README.md").read_text(),
-        )
-        if not re.fullmatch(
-            r"\*This project has been created as part of the 42 "
-            r"curriculum by .+\*",
-            readme.splitlines()[0],
-        ):
-            raise ValueError("missing README attribution")
-        for heading in (
-            "Description", "Instructions",
-            "Algorithm and Implementation Strategy",
-            "Visual Representation", "Resources",
-        ):
-            section = re.search(
-                rf"(?m)^## {heading}\s*\n([\s\S]*?)(?=^## |\Z)", readme
-            )
-            if section is None or len(section[1].strip()) < 40:
-                raise ValueError(f"empty README section: {heading}")
-        if "### AI Usage" not in readme:
-            raise ValueError("missing AI usage disclosure")
+        self.check_readme()
         makefile = (self.root / "Makefile").read_text()
         for rule in ("install", "run", "debug", "clean", "lint"):
             if re.search(rf"(?m)^{rule}:", makefile) is None:
@@ -174,6 +153,33 @@ class SubjectVerifier:
                     imports = [node.module or ""]
                 if any(name.split(".")[0] in forbidden for name in imports):
                     raise ValueError(f"forbidden graph library: {path}")
+
+    def check_readme(self) -> None:
+        """Check the required first line and sections without a length rule."""
+        text = (self.root / "README.md").read_text()
+        lines = text.splitlines()
+        login = r"[A-Za-z0-9][A-Za-z0-9_-]*"
+        if not lines or not re.fullmatch(
+            r"([*_])This project has been created as part of the 42 "
+            rf"curriculum by {login}(?:, {login})*\1",
+            lines[0].strip(),
+        ):
+            raise ValueError("missing README attribution")
+        readme = re.sub(
+            r"<!--[\s\S]*?-->", "", text,
+        )
+        for heading in (
+            "Description", "Instructions",
+            "Algorithm and Implementation Strategy",
+            "Visual Representation", "Resources",
+        ):
+            section = re.search(
+                rf"(?m)^## {heading}\s*\n([\s\S]*?)(?=^## |\Z)", readme
+            )
+            if section is None or not section[1].strip():
+                raise ValueError(f"empty README section: {heading}")
+        if "### AI Usage" not in readme:
+            raise ValueError("missing AI usage disclosure")
 
     def check_movements(self) -> None:
         """Replay mandatory maps and bounded adversarial fixtures."""
