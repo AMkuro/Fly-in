@@ -79,4 +79,27 @@ and forward references. Full lint fails on the existing GUI type errors.
 The Subject gate rejects the placeholder README and summary-only CLI. These
 are findings in the existing implementation, not reasons to modify it here.
 
-GitHub Actions results will be recorded after the workflow is published.
+## Live GitHub Actions result
+
+[Run 39935647934](https://github.com/AMkuro/Fly-in/actions/runs/39935647934)
+tested develop `2fb9e09a7c56742e52aa86204fac6b48f0035e52`.
+
+| Job | Observed outcome |
+| --- | --- |
+| Quality (Python 3.10) | Install succeeds; existing GUI mypy errors and parser contract failures are detected |
+| Quality (Python 3.14) | Same findings; verifier/export/sync self-tests all pass |
+| Subject submission gate | Exports 38 files; exported lint fails on existing types; verifier rejects placeholder README and summary-only CLI |
+| Update master | Skipped because its required checks failed |
+
+Both Python versions ran 12 test methods: all methods except the parser contract
+method pass. That method reports two empty-input errors and one forward-reference
+failure. CI failure is expected evidence of the current application's condition;
+the verification machinery itself runs successfully.
+
+The initial master is `eca84b60eaf7a531bbcda80f2bd261d03b0f2341` and remains
+the explicitly unverified bootstrap. Local and remote develop/master exist;
+GitHub's default and local origin/HEAD both point to develop. Main is retained.
+
+The source/configuration preservation check compares all pre-existing tracked
+files against `26651a3`. This automation change adds files only; existing Python,
+README, requirements and Makefile contents are byte-for-byte unchanged.

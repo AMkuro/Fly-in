@@ -4,6 +4,9 @@
 
 Failures are recorded, not repaired or suppressed.
 
+Live CI confirmation and job outcomes are recorded in
+[submission-audit.md](submission-audit.md#live-github-actions-result).
+
 ## New infrastructure flake8
 
 Exit status: `0`
