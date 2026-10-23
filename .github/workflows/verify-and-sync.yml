@@ -1,0 +1,103 @@
+name: Verify and sync submission
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: make install
+      - run: make lint
+      - run: make test
+        if: ${{ !cancelled() }}
+
+  subject:
+    name: Subject submission gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+      - run: make install
+      - name: Export the exact tested revision
+        run: .venv/bin/python -m tools.export_submission "$RUNNER_TEMP/submission"
+      - name: Lint the exported files
+        run: make -C "$RUNNER_TEMP/submission" lint PYTHON="$GITHUB_WORKSPACE/.venv/bin/python"
+      - name: Verify README, imports, docstrings and movement streams
+        if: ${{ !cancelled() }}
+        run: .venv/bin/python -m tools.verify_subject "$RUNNER_TEMP/submission"
+
+  sync:
+    name: Update master
+    needs: [quality, subject]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: sync-master
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Export the verified revision
+        run: python3 -m tools.export_submission "$RUNNER_TEMP/submission"
+      - name: Commit only exported files and fast-forward master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin develop
+          if [ "$(git rev-parse origin/develop)" != "$GITHUB_SHA" ]; then
+            echo 'A newer develop revision exists; skipping stale submission.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          export GIT_INDEX_FILE="$RUNNER_TEMP/submission.index"
+          git read-tree --empty
+          (
+            cd "$RUNNER_TEMP/submission"
+            GIT_DIR="$GITHUB_WORKSPACE/.git" git add --all .
+          )
+          tree=$(git write-tree)
+          parents=()
+          if git show-ref --verify --quiet refs/remotes/origin/master; then
+            parent=$(git rev-parse origin/master)
+            if [ "$tree" = "$(git rev-parse "$parent^{tree}")" ]; then
+              echo 'Submission contents already match.'
+              exit 0
+            fi
+            parents=(-p "$parent")
+          fi
+          commit=$(git commit-tree "$tree" "${parents[@]}" -m "submit: verified develop $GITHUB_SHA")
+          git push origin "$commit:refs/heads/master"

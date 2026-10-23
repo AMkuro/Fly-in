@@ -1,0 +1,9 @@
+# Paths are relative to the repository root. Only committed regular files.
+.gitignore
+.flake8
+Makefile
+README.md
+requirements.txt
+fly-in.py
+fly_in/**/*.py
+maps/**/*.txt
