@@ -6,8 +6,8 @@ from typing import Mapping
 
 from pydantic import ValidationError
 
-from model.map_data import MapData
-from parse.map_format import LineKey, RawMap
+from fly_in.model.map_data import MapData
+from fly_in.parse.map_format_def import LineKey, RawMap
 
 
 def convert_and_validate(raw_map: RawMap) -> MapData:
@@ -49,12 +49,42 @@ def _line_number_for_error(
     if top_level in {LineKey.START_HUB.value, LineKey.END_HUB.value}:
         return _line_number_from_mapping(raw_map.get(top_level))
 
+    if top_level == "zones" and len(location) > 1:
+        zone_name = location[1]
+        if isinstance(zone_name, str):
+            return _line_number_for_zone_name(raw_map, zone_name)
+
     if top_level in {"hubs", "connections"} and len(location) > 1:
         index = location[1]
         items = raw_map.get(top_level)
         if isinstance(index, int) and isinstance(items, list):
             if 0 <= index < len(items):
                 return _line_number_from_mapping(items[index])
+    return None
+
+
+def _line_number_for_zone_name(raw_map: RawMap, zone_name: str) -> int | None:
+    """Find the source line number for a named raw zone."""
+    for key in (LineKey.START_HUB.value, LineKey.END_HUB.value):
+        zone = raw_map.get(key)
+        if _mapping_name(zone) == zone_name:
+            return _line_number_from_mapping(zone)
+
+    hubs = raw_map.get("hubs")
+    if isinstance(hubs, list):
+        for zone in hubs:
+            if _mapping_name(zone) == zone_name:
+                return _line_number_from_mapping(zone)
+    return None
+
+
+def _mapping_name(value: object) -> str | None:
+    """Read a name from a raw zone mapping."""
+    if not isinstance(value, Mapping):
+        return None
+    name = value.get("name")
+    if isinstance(name, str):
+        return name
     return None
 
 

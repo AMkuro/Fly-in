@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from model.map_data import MapData
-from parse.map_format import (
+from fly_in.model.map_data import MapData
+from fly_in.parse.map_format_def import (
     LineKey,
     MODEL_METADATA_KEYS,
     MapParseError,
@@ -17,8 +17,8 @@ from parse.map_format import (
     ZONE_METADATA_KEY,
     ZONE_TYPE_FIELD,
 )
-from parse.raw_map_builder import build_raw_map
-from parse.validation_adapter import convert_and_validate
+from fly_in.parse.raw_map_builder import build_raw_map
+from fly_in.parse.validation_adapter import convert_and_validate
 
 __all__ = [
     "FlyInMapParser",

@@ -1,7 +1,11 @@
 DEFAULT_VENV_NAME := .venv
 PYTHON := $(DEFAULT_VENV_NAME)/bin/python3
 PIP := $(DEFAULT_VENV_NAME)/bin/pip
-MAIN := main.py
+MAIN := fly-in.py
+DEFAULT_MAP := maps/easy/01_linear_path.txt
+MAP_ORIGIN := $(origin MAP)
+MAP ?= $(DEFAULT_MAP)
+FLAGS ?=
 
 .PHONY: help install run debug clean lint lint-strict
 
@@ -9,6 +13,7 @@ help:
 	@echo "Available targets:"
 	@echo "  make install      Detect or create a virtualenv and install dependencies"
 	@echo "  make run          Run the project"
+	@echo "  make run FLAGS=--gui  Open the GUI viewer"
 	@echo "  make debug        Run the project with pdb"
 	@echo "  make clean        Remove caches and temporary files"
 	@echo "  make lint         Run flake8 and required mypy checks"
@@ -30,7 +35,10 @@ run:
 		echo "Error: no valid virtualenv found. Run 'make install' first." >&2; \
 		exit 1; \
 	fi; \
-	$(PYTHON) "$(MAIN)" 
+	if [ "$(MAP_ORIGIN)" = "undefined" ]; then \
+		echo "No MAP specified; using default easy map: $(MAP)"; \
+	fi; \
+	$(PYTHON) "$(MAIN)" $(FLAGS) "$(MAP)"
 
 debug:
 	@set -eu; \
@@ -38,7 +46,7 @@ debug:
 		echo "Error: no valid virtualenv found. Run 'make install' first." >&2; \
 		exit 1; \
 	fi; \
-	$(PYTHON) -m pdb "$(MAIN)"
+	$(PYTHON) -m pdb "$(MAIN)" $(FLAGS) "$(MAP)"
 
 clean:
 	@set -eu; \

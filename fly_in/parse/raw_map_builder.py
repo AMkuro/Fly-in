@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from parse.map_format import (
+from fly_in.parse.map_format_def import (
     LineKey,
     MODEL_METADATA_KEYS,
     MapParseError,
@@ -24,8 +24,7 @@ def build_raw_map(parsed_lines: list[ParsedLine]) -> RawMap:
         raw_map[LineKey.NB_DRONES.value] = value
     else:
         raise MapParseError(
-            first_line,
-            "first meaningful line must be 'nb_drones: <number>'.",
+            first_line, "first meaningful line must be 'nb_drones: <number>'."
         )
 
     except_first_line = parsed_lines[1:]
@@ -56,9 +55,7 @@ def _append_zone(
         hubs.append(raw_zone)
 
 
-def _append_connection(
-    raw_map: RawMap, line_number: int, value: str
-) -> None:
+def _append_connection(raw_map: RawMap, line_number: int, value: str) -> None:
     """Parse and append one connection to the raw map."""
     raw_connection = _parse_connection(line_number, value)
 
@@ -74,8 +71,7 @@ def _parse_zone(line_number: int, value: str) -> RawZone:
     parts = body.split()
     if len(parts) != 3:
         raise MapParseError(
-            line_number,
-            "zone must use '<name> <x> <y> [metadata]' syntax.",
+            line_number, "zone must use '<name> <x> <y> [metadata]' syntax."
         )
 
     name, x_value, y_value = parts
