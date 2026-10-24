@@ -1,15 +1,15 @@
 # Development and submission
 
-`develop` is the development branch and GitHub default branch. `main` is retained
-as historical data. Files selected by
-[`submission-files.txt`](../submission-files.txt) are managed automatically on
-`master`; do not merge development history into it. Unexpected files on master
-are preserved and reported, as described below.
+`develop` is the development branch and GitHub default branch. `main`, `develop`
+and `master` are retained; any change to the role of main is a separate decision.
+`master` is for reviewed release/submission contents, selected using
+[`submission-files.txt`](../submission-files.txt); do not merge development
+history wholesale into it. CI performs verification only and never updates master.
 
 The initial `master` snapshot is explicitly **unverified**. It is created before
 the project is complete at the repository owner's request. Its existence does
-not mean the project is ready for evaluation. Later automated updates require
-both CI jobs below to pass for the same develop revision.
+not mean the project is ready for evaluation. CI success does not publish or
+approve a release.
 
 ## Checks
 
@@ -20,8 +20,8 @@ dispatch. No developer machine path or Subject PDF is needed in CI.
   `make test` commands. Tests run even if lint fails, to show both findings.
 - **Subject submission gate**: exports the exact Git commit to a fresh directory,
   runs the existing lint target there, and runs the development-only verifier
-  against the exported CLI. This job runs independently of Quality; the sync job
-  requires both to pass. It does not fix the candidate or relax failing checks.
+  against the exported CLI. This job runs independently of Quality. It does not
+  fix the candidate or relax failing checks, and does not publish the candidate.
 
 Use a working virtual environment for local checks. The Makefile's `PYTHON`
 variable can point to an existing environment:
@@ -77,54 +77,61 @@ Checks include:
 
 CI does **not** prove optimality, priority preference, complete object-oriented
 design, GUI usefulness, resource safety, or behavior for every possible graph.
-Those remain peer-review items. Passing automation is necessary for syncing,
-not a claim of complete Subject compliance.
+Those remain peer-review items. Passing automation is evidence for review,
+not release approval or a claim of complete Subject compliance.
 
-## Automatic master updates
+## Verification-only CI
 
-Only a successful push/manual run on `refs/heads/develop` can update master.
-Pull requests have read-only workflow permissions and cannot publish. Write
-permission is limited to the sync job. GitHub's workflow permission and event
-semantics are documented in the
-[official reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+The [workflow](../.github/workflows/verify-and-sync.yml) retains develop push,
+pull-request and manual-dispatch triggers, with only Quality and Subject
+submission gate jobs. All workflow permissions are read-only and both checkouts
+set `persist-credentials: false`. There is no publishing job, commit creation,
+master push, warning-file publication or release dispatch path. Even when both
+checks pass, neither push-triggered nor manual runs update master.
 
-The sync job exports the same immutable revision that passed the checks. It
-checks the remote develop head to skip obsolete runs, serializes master updates,
-and adds one commit to master's own history using a separate Git index. It does
-not change the checkout or rewrite develop history. Pushes are fast-forward
-only; a concurrent master change causes failure instead of being overwritten.
-Identical exported contents cause no commit. Each normal submission commit
-records the source develop SHA.
+The workflow filename is retained to avoid unrelated renaming. Earlier audit
+and verification records describe the retired sync mechanism, not current CI.
+Changes take effect on GitHub only after this revision is pushed. Older workflow
+revisions or already-running jobs are not changed by this local edit; an old
+manual run must not be used to publish a release.
 
-### Unexpected files on master
+## Reviewed releases
 
-After the checks pass, the sync job compares master's paths with the current
-manifest. If a path is outside the manifest, it does **not** delete that file or
-apply the new candidate. It retains master's existing tree and only adds or
-updates `SUBMISSION_WARNING.md`, listing the unexpected paths. File contents,
-symlinks and modes are preserved without materializing those extra files.
+Release policy: release at version changes or important milestones. A release
+candidate must go through a PR with human code review and explicit approval
+before it reaches master. This release-specific PR requirement does not require
+PRs for every development change. CI success alone does not authorize a release.
+The GitHub submission branch and the 42 intranet repository remain separate;
+42 submission also requires human review and approval.
 
-The job then fails with a GitHub Actions warning so the blocked update is visible.
-No email integration is configured. Repeated detection of the same paths does
-not create duplicate warning commits. A maintainer can remove unwanted files
-from master, or add genuinely required files to develop's manifest. A later
-passing run clears the warning and resumes normal updates when no extras remain.
+Candidate creation and the PR-based release mechanism are **not implemented**
+by this change. A later task must define how selected files become a reviewable
+candidate, how its source revision and verification evidence are recorded, and
+how the approved candidate is applied without importing development-only files.
+The current PR checks target develop, not master; release-PR validation is also
+part of that later task. No automatic PR creation or release workflow is added.
 
-`SUBMISSION_WARNING.md` is reserved for CI and is not a deliverable. Do not
-create unrelated content at that path. Paths inside the manifest remain
-CI-managed: they are updated or removed to match the verified candidate.
-Unexpected-file checks run during the sync job, so no warning file is published
-while the preceding verification jobs are failing.
+<a id="unexpected-files-on-master"></a>
 
-`.flake8` is shared lint configuration, not a cache. It remains in the manifest
-so the submitted lint command uses the same exclusions as development. It is
-not ignored by this repository's `.gitignore`.
+[`tools/export_submission.py`](../tools/export_submission.py) and the manifest
+remain available for exporting committed candidate files. The existing
+[`tools/prepare_submission.py`](../tools/prepare_submission.py) is retained but
+is not called by CI. Its old warning text describes retired automation and must
+be reviewed before reusing that helper in a future release mechanism. It does
+not itself commit or push. CI no longer creates or clears `SUBMISSION_WARNING.md`.
 
-No branch-protection rules are installed by this setup. Maintainers can still
-push manually, so enforcement here is the automated publication path, not an
-access-control guarantee.
+`.flake8` remains shared lint configuration in the manifest, not cache data.
 
-The migration audit and known baseline failures are in
+### Policy versus GitHub enforcement
+
+On 2026-10-24 JST, read-only GitHub API queries for master returned
+`404 Branch not protected` from the branch-protection endpoint and an empty
+list from the applicable branch-rules endpoint. PR review is therefore an
+operational requirement, **not confirmed technical enforcement** against direct
+pushes or bypasses. Repository settings were not changed. Recheck protection and
+rulesets, including approval and bypass settings, before establishing releases.
+
+The historical migration audit and baseline failures remain in
 [`submission-audit.md`](submission-audit.md).
 
 <a id="documentation"></a>
@@ -133,10 +140,9 @@ The migration audit and known baseline failures are in
 
 - [`AGENTS.md`](../AGENTS.md) is the canonical source for Agent behavior and
   approval boundaries. Human code review and separate approval are required
-  before changes reach master or the 42 submission repository, including via
-  automatic publication. The existing workflow does not enforce this approval;
-  obtain it before a push or dispatch that could publish. CI changes are a
-  separate task.
+  before changes reach master or the 42 submission repository. The release
+  policy above requires a reviewed, explicitly approved PR; verification-only
+  CI neither publishes nor enforces repository branch protection.
 - [`architecture.md`](architecture.md) owns current responsibilities and
   accepted shared contracts; [`decisions.md`](decisions.md) owns decision IDs,
   conclusions, approval evidence and rationale. This document owns development,

@@ -1,4 +1,4 @@
-name: Verify and sync submission
+name: Verify submission
 
 on:
   push:
@@ -54,55 +54,3 @@ jobs:
       - name: Verify README, imports, docstrings and movement streams
         if: ${{ !cancelled() }}
         run: .venv/bin/python -m tools.verify_subject "$RUNNER_TEMP/submission"
-
-  sync:
-    name: Update master
-    needs: [quality, subject]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    concurrency:
-      group: sync-master
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Export the verified revision
-        run: python3 -m tools.export_submission "$RUNNER_TEMP/submission"
-      - name: Commit only exported files and fast-forward master
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin
-          if [ "$(git rev-parse origin/develop)" != "$GITHUB_SHA" ]; then
-            echo 'A newer develop revision exists; skipping stale submission.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          export GIT_INDEX_FILE="$RUNNER_TEMP/submission.index"
-          parent=''
-          parents=()
-          if git show-ref --verify --quiet refs/remotes/origin/master; then
-            parent=$(git rev-parse origin/master)
-            parents=(-p "$parent")
-          fi
-          mode=$(python3 -m tools.prepare_submission "$RUNNER_TEMP/submission" --parent "$parent")
-          tree=$(git write-tree)
-          message="submit: verified develop $GITHUB_SHA"
-          if [ "$mode" = warning ]; then
-            message='warn: preserve unexpected submission files'
-          fi
-          if [ -n "$parent" ] && [ "$tree" = "$(git rev-parse "$parent^{tree}")" ]; then
-            echo 'Submission contents already match.'
-          else
-            commit=$(git commit-tree "$tree" "${parents[@]}" -m "$message")
-            git push origin "$commit:refs/heads/master"
-          fi
-          if [ "$mode" = warning ]; then
-            echo '::warning::Unexpected master files preserved. Review SUBMISSION_WARNING.md; submission update stopped.'
-            exit 1
-          fi
