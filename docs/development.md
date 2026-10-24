@@ -126,3 +126,45 @@ access-control guarantee.
 
 The migration audit and known baseline failures are in
 [`submission-audit.md`](submission-audit.md).
+
+<a id="documentation"></a>
+
+## Documentation and approval
+
+- [`AGENTS.md`](../AGENTS.md) is the canonical source for Agent behavior and
+  approval boundaries. Human code review and separate approval are required
+  before changes reach master or the 42 submission repository, including via
+  automatic publication. The existing workflow does not enforce this approval;
+  obtain it before a push or dispatch that could publish. CI changes are a
+  separate task.
+- [`architecture.md`](architecture.md) owns current responsibilities and
+  accepted shared contracts; [`decisions.md`](decisions.md) owns decision IDs,
+  conclusions, approval evidence and rationale. This document owns development,
+  verification and submission procedures. [`README.md`](../README.md) owns
+  user-facing execution and evaluation explanations and must remain useful in
+  the exported submission, where development documents are absent. Executable
+  settings remain in Makefile, workflow and submission manifest; link to them
+  rather than maintaining a second configuration list.
+- The supplied Subject remains authoritative for requirements. The development
+  verifier may contain an unapproved Connection-capacity interpretation; its
+  departure/arrival counting above describes existing behavior, not a settled
+  specification. Detailed auditing is deferred; see DEC-002 in the decision index.
+- Update architecture for responsibility, shared-contract or implementation-state
+  changes; decisions for newly approved or superseded judgments; this document
+  for procedure changes; README for user-visible changes. Update affected code
+  and documents in the same change unit. If using a PR, include both in that PR;
+  a PR is not mandatory for every change. The change author checks related links
+  and stale descriptions; humans approve design changes. Internal changes with
+  no documentation impact need no document edit.
+- Issues own discussion and unresolved progress once a topic is transferred;
+  the decision index then links to the Issue without copying progress. Record
+  an explicit human approval reference when formalizing a decision; closing an
+  Issue alone is not approval. Projects, if used, own progress and priority only.
+  Preserve superseded rationale with a successor link and update current
+  contracts together.
+- [Handoffs](../.agent/handoffs/2026-10-23-design-context.md), audit and verification
+  records are historical evidence, not current specifications or current test
+  results. Preserve their original content; reference them for provenance.
+  Create a handoff only when unfinished context is needed to resume work, and
+  link to canonical decisions rather than duplicating them. Before completing a
+  change, check relative links, approval states, affected references and diff scope.
