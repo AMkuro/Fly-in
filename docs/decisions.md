@@ -25,6 +25,7 @@
 - 結論・状態: [確認済みの2点](architecture.md#pending)を維持する（`CONFIRMED`）。具体的な計算式はOPEN-001として保留。
 - 理由・根拠: Subject読解で生じた疑問を仲間に確認した結果（引き継ぎ記録のDEC-002）。Subject本文に規定されたことの証明とは区別する。
 - 制限: 既存検証器の挙動や暫定式は承認根拠にしない。2026-10-23の文書構成調査時にも開発者がOPEN-001の継続保留を確認し、今回の依頼でも維持された。関連Issue: 未確認（URL未提供）。
+- 追記（2026-10-25）: Subject v2.0 VII.3で[2つの規則](architecture.md#pending)が明文化された。restricted Connectionを到着ターンにも占有中と数える既存検証器の扱いは、この明文と矛盾する。OPEN-001の残り（上記以外の具体式）は引き続き保留。根拠: 2026-10-25 JSTのv2.0差分確認セッションで、開発者が本追記を指示。関連Issue: [T01 / #1](https://github.com/AMkuro/Fly-in/issues/1)・[T09 / #5](https://github.com/AMkuro/Fly-in/issues/5)。
 
 <a id="dec-003"></a>
 
@@ -68,6 +69,24 @@
 - 理由: 開発用資産と提出成果物を区別し、提出判断を自動検査の成功だけに委ねない。
 - 関連文書: [承認規則](../AGENTS.md)、[現行の提出手順](development.md)。段階的にCIを導入する方針も維持するが、現行設定の存在は未決定の解釈を承認しない。
 - 根拠: 引き継ぎ記録の9.1・9.2と今回の依頼。2026-10-24の自動同期停止依頼により、CIからの自動反映を廃止。バージョン変更・重要なマイルストーンで、PRによる人間のコードレビューと明示的承認後にリリースする。`main`・`develop`・`master`を維持し、`main`の役割変更は別途判断する。候補作成・リリース機構の構築は後続タスクとする。関連Issue: 未確認（URL未提供）。
+
+<a id="dec-010"></a>
+
+## DEC-010 — start/endの`max_drones`は値を検証してから無視する
+
+- 結論・状態: start_hub・end_hubに書かれた正整数の`max_drones`は容量として使わない。0以下・非整数などの不正値は、他のZoneと同じく行と原因を示すParserエラーにする（`ACCEPTED`、容量計算は未実装）。
+- 理由: Subject v2.0 VII.4は、start/endの容量指定を無視しエラーにしないと定める。不正値まで受理するかは一意に読めないため、メタデータ構文の検証を優先した。
+- 根拠: 2026-10-25 JSTのv2.0差分確認セッションで、開発者が「start/endのmax_dronesが0以下などの不正値だった場合はエラー」と明示回答。正の値を無視する部分はSubjectの明文、不正値をエラーにする部分は開発者の判断。
+- 関連Issue: [T04 / #4](https://github.com/AMkuro/Fly-in/issues/4)・[T01 / #1](https://github.com/AMkuro/Fly-in/issues/1)。契約は[architecture](architecture.md#pending)を参照する。
+
+<a id="dec-011"></a>
+
+## DEC-011 — 開発用検証器のターン数上限を廃止する
+
+- 結論・状態: 配布マップのターン数上限（easy 9 / medium 30 / hard 59）による不合格判定を廃止する（`ACCEPTED`、検証器は未修正）。
+- 理由: Subject v2.0 VII.6では、ターン数は合否にも成績にも影響せず、正しさとは独立に評価される。上限は廃止されたv1.2の一般目標に由来する。
+- 根拠: 2026-10-25 JSTのv2.0差分確認セッションで、開発者が廃止を明示回答。停止しない出力への対策（プロセスのタイムアウト）は対象外。
+- 関連Issue: 修正は[T10 / #10](https://github.com/AMkuro/Fly-in/issues/10)。現行の挙動は[development.md](development.md)の検証範囲を参照する。
 
 <a id="open-items"></a>
 
