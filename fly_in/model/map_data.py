@@ -205,10 +205,15 @@ class MapData(BaseModel):
             line_number = cls._raw_zone_line(raw_zone)
             previous_line = zone_lines.get(zone_name)
             if previous_line is not None:
-                line_text = cls._line_prefix(line_number)
+                # Raw layout groups special hubs before regular hubs.
+                first_line = min(previous_line, line_number or previous_line)
+                duplicate_line = max(
+                    previous_line, line_number or previous_line
+                )
+                line_text = cls._line_prefix(duplicate_line)
                 raise ValueError(
                     f"{line_text}duplicate zone name {zone_name!r}; "
-                    f"first defined on line {previous_line}."
+                    f"first defined on line {first_line}."
                 )
             zones[zone_name] = raw_zone
             if line_number is not None:
@@ -272,9 +277,15 @@ class MapData(BaseModel):
     def _validate_endpoint_exists(
         connection: Connection, endpoint: str, zone_lines: dict[str, int]
     ) -> None:
-        """Validate that a connection endpoint exists in the zone list."""
+        """Require each endpoint to be declared before its connection."""
         if endpoint not in zone_lines:
             raise ValueError(
                 f"line {connection.line_number}: unknown zone "
                 f"{endpoint!r} in connection {connection.name!r}."
+            )
+        if zone_lines[endpoint] >= connection.line_number:
+            raise ValueError(
+                f"line {connection.line_number}: zone {endpoint!r} must be "
+                f"defined before connection {connection.name!r}; "
+                f"zone defined on line {zone_lines[endpoint]}."
             )

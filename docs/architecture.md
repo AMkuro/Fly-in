@@ -22,6 +22,17 @@
 | [開発用検証器](../tools/verify_subject.py) | Parserが返す入力事実を使ってCLI出力を再生検証する。本体のGraph・探索・Schedulerは呼ばない。Simulation本体でも、Subject適合性の確定した根拠でもない |
 
 現時点の接続は`CLI → FlyInApp → Parser → MapData`であり、そこからGraph生成と静的表示へ進む。
+
+Parserの入力契約は[READMEのMap input](../README.md#map-input)を参照する。
+RawMap生成では空入力・必須宣言・括弧とタグ・整数の字句を検証し、
+数値を`int`に変換する。機体数の正値検証も宣言行を保持するこの段階で行い、
+Model側の正値制約は直接検証時にも維持する。Pydanticは名前・種類・容量の正値・
+重複・参照先の存在と宣言順を検証する。前方参照の不変条件は
+`zone.line_number < connection.line_number`。RawMap・MapDataの構造と呼出境界は維持する。
+エラー調査では、入力の物理行番号、RawMapの各要素の`line_number`、
+検証アダプタのフィールドパスを順に確認する。正規化で特殊Zoneを先に集めても、
+重複名のエラーは元の宣言順で表示する。CLIの既存例外境界は変更しない。
+
 [simple_dijkstra.py](../fly_in/pathfinding/simple_dijkstra.py)は空で、[simulation](../fly_in/simulation/__init__.py)にも実装はない。ファイル名からDijkstraの採用を推定しない。
 現在のデータ形式は実装の観測結果であり、将来も固定する契約ではない（[DEC-003](decisions.md#dec-003)）。
 

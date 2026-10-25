@@ -12,6 +12,33 @@
 
 <!-- any relevant information about compilation, installation, and/or execution. -->
 
+### Map input
+
+The parser follows Subject v1.2 VI and VII.4: the first non-comment, nonempty
+line is `nb_drones: <positive_integer>`. Declare exactly one `start_hub` and
+one `end_hub`, and give every zone a unique name and integer coordinates.
+Zone names cannot contain spaces or dashes. Each `connection: a-b` must
+reference previously declared zones; `a-b` and `b-a` are duplicate connections.
+Zones and connections may otherwise be interleaved.
+
+Zone metadata accepts `zone`, `color` and `max_drones`; connection metadata
+accepts `max_link_capacity`. Tags inside one optional `[...]` block may appear
+in any order. Zone types are `normal`, `blocked`, `restricted` and `priority`;
+colors accept arbitrary single-word strings. Defaults are `normal`, no color,
+and capacity 1. Drone counts and capacities must be positive integers;
+coordinates may be negative. Decimal spellings such as `1.0` are rejected.
+Comments begin with `#`.
+
+Additional project policies, rather than explicit Subject rules: self-links
+and unsupported metadata keys are rejected. Repeated metadata keys are also
+rejected, including repetitions with the same value. An empty metadata block
+is accepted. These policies do not define movement or turn-capacity semantics.
+
+Input errors stop loading. Errors identify the source line and cause; missing
+declarations identify the end of input, and an empty or comment-only file
+reports that it contains no map declarations. The CLI writes configuration
+errors to stderr and exits with status 1, without a traceback.
+
 ## Algorithm and Implementation Strategy
 
 <!-- a detailed description of your algorithm choices and implementation strategy -->

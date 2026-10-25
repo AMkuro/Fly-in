@@ -19,9 +19,17 @@ def build_raw_map(parsed_lines: list[ParsedLine]) -> RawMap:
     """Build the JSON-like dictionary passed to Pydantic."""
     raw_map: RawMap = {"hubs": [], "connections": []}
 
+    if not parsed_lines:
+        raise ValueError(
+            "no map declarations; expected nb_drones, start_hub and end_hub."
+        )
+
     first_line, key, value = parsed_lines[0]
     if key is LineKey.NB_DRONES:
-        raw_map[LineKey.NB_DRONES.value] = value
+        count = _parse_integer(first_line, key.value, value)
+        if count <= 0:
+            raise MapParseError(first_line, "nb_drones must be positive.")
+        raw_map[key.value] = count
     else:
         raise MapParseError(
             first_line, "first meaningful line must be 'nb_drones: <number>'."
@@ -35,6 +43,12 @@ def build_raw_map(parsed_lines: list[ParsedLine]) -> RawMap:
         if key is LineKey.CONNECTION:
             _append_connection(raw_map, line_number, value)
 
+    for required in (LineKey.START_HUB, LineKey.END_HUB):
+        if required.value not in raw_map:
+            raise MapParseError(
+                parsed_lines[-1][0],
+                f"end of input: missing {required.value} declaration.",
+            )
     return raw_map
 
 
@@ -78,12 +92,15 @@ def _parse_zone(line_number: int, value: str) -> RawZone:
     raw_zone: RawZone = {
         "line_number": line_number,
         "name": name,
-        "x": x_value,
-        "y": y_value,
+        "x": _parse_integer(line_number, "x", x_value),
+        "y": _parse_integer(line_number, "y", y_value),
     }
     for metadata_key, metadata_value in metadata.items():
         field_name = _metadata_field_name(metadata_key)
-        raw_zone[field_name] = metadata_value
+        raw_zone[field_name] = (
+            _parse_integer(line_number, field_name, metadata_value)
+            if field_name == "max_drones" else metadata_value
+        )
     return raw_zone
 
 
@@ -105,7 +122,10 @@ def _parse_connection(line_number: int, value: str) -> RawConnection:
     }
     for metadata_key, metadata_value in metadata.items():
         field_name = _metadata_field_name(metadata_key)
-        raw_connection[field_name] = metadata_value
+        raw_connection[field_name] = (
+            _parse_integer(line_number, field_name, metadata_value)
+            if field_name == "max_link_capacity" else metadata_value
+        )
     return raw_connection
 
 
@@ -116,7 +136,10 @@ def _parse_metadata(
     if "[" not in value and "]" not in value:
         return value.strip(), {}
 
-    if value.count("[") != 1 or value.count("]") != 1:
+    if (
+        value.count("[") != 1 or value.count("]") != 1
+        or value.index("[") > value.index("]")
+    ):
         raise MapParseError(
             line_number, "metadata must use one pair of '[...]' block."
         )
@@ -136,8 +159,22 @@ def _parse_metadata(
                 line_number,
                 f"invalid metadata token {token!r}; expected key=value.",
             )
-        metadata.setdefault(key_text, metadata_value)
+        if key_text in metadata:
+            raise MapParseError(
+                line_number, f"duplicate metadata key {key_text!r}."
+            )
+        metadata[key_text] = metadata_value
     return body.strip(), metadata
+
+
+def _parse_integer(line_number: int, field_name: str, value: str) -> int:
+    """Parse integer syntax without Pydantic's decimal-string coercion."""
+    try:
+        return int(value)
+    except ValueError as error:
+        raise MapParseError(
+            line_number, f"{field_name} must be an integer; got {value!r}."
+        ) from error
 
 
 def _metadata_field_name(metadata_key: str) -> str:
