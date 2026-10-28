@@ -28,30 +28,6 @@
 - 追記（2026-10-25）: Subject v2.0 VII.3で[同ターンの容量再利用とrestricted到着ターンのConnection解放](architecture.md#pending)が明文化された。restricted Connectionを到着ターンにも占有中と数える既存検証器の扱いは、この明文と矛盾する。この時点で具体式は引き続き未承認だった。根拠: 2026-10-25 JSTのv2.0差分確認セッションで開発者が追記を指示。
 - 後続判断（2026-10-28）: OPEN-001の具体式を開発者が明示採用。現行契約と承認理由は[DEC-012](#dec-012)を参照する。関連Issue: [T01 / #1](https://github.com/AMkuro/Fly-in/issues/1)・[T09 / #5](https://github.com/AMkuro/Fly-in/issues/5)。
 
-<a id="dec-012"></a>
-
-## DEC-012 — ターン全体の容量式とスケジュール合法性
-
-- 結論・状態: Connection容量の具体式と全スケジュールの不変条件を採用する（`ACCEPTED`、本体は未実装）。従来のOPEN-001を解決する。
-- Connection容量の契約: 全Connection `e`・ターン `t` について `0 <= B_e(t) - F_e(t) + S_e(t) + N_e(t) <= C_e`。ここで`B`はターン開始時にConnection上にいる機体数、`F`は同ターンのConnectionからの到着数、`S`は同ターンのrestrictedへ向けた進入数、`N`は通常移動による同Connectionの通過数（双方向合計）、`C`は`max_link_capacity`。合法なrestrictedの強制到着では`B=F`であり、`S+N<=C`と簡約できる。ただし、強制到着の機体別判定は省略しない。
-- Zoneと合法性の契約: 同時出発・到着を集計した`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`が、start/end以外の全Zoneで`0<=O_z(t+1)<=C_z`を満たす。各ターンの合法性は、移動規則、Zone容量、Connection容量、restricted強制到着の論理積。全ターンの合法性と、有限の終了ターンでの全機体`AtZone(end)`を全スケジュールに要求する。最短ターン数の証明は別であり、ここでは確定しない。
-- 理由: v2.0の同時移動・同ターン容量解放に整合し、通常移動・双方向共有・restricted到着と後続進入を同じ式で判定できる。各機体の逐次更新順序に依存させない。
-- 根拠: 2026-10-28 JST、この会話で開発者が「Connection容量の式は今のところ問題が見られないから採用」「T01で確定すべき不変条件にも問題はない」と明示回答。[T01の規則・手計算集約コメント](https://github.com/AMkuro/Fly-in/issues/1#issuecomment-6465527632)は承認内容の整理記録であり、コメント自体を独立した人間の承認と誤認しない。Subjectの根拠はv2.0 VII.2・VII.3。
-- 現行契約: [移動・容量・スケジュール合法性](architecture.md#t01-movement-contract)。実装方式、型、将来容量予約と再計画は[T02](https://github.com/AMkuro/Fly-in/issues/2)・[T03](https://github.com/AMkuro/Fly-in/issues/3)で扱う。
-
-<a id="dec-013"></a>
-
-## DEC-013 — T01の境界解釈・エラー報告・Connection出力
-
-- 結論・状態: 次の境界解釈と外部出力規則を採用する（`ACCEPTED`、本体は未実装）。
-  - **startへの再入場**: 一度startを出たドローンが戻ることを禁止しない。隣接性・Connection容量等が満たされれば合法。startに容量上限はない。最適な経路として戻る意義が乏しいことと合法性は別とする。
-  - **到達不能**: 入力構文の検証とは区別し、startからendへの経路がない場合はシミュレーション開始前に検出して終了。標準エラー出力（stderr）に`Error: No path from start to end.`を出し、終了コード`1`を返す。
-  - **Connection出力**: restricted移動中の`D<ID>-<connection>`は、**出発元-到着先**の移動方向順（例: 入力が`connection: R-A`でも、A→Rは`D1-A-R`、翌ターンの到着は`D1-R`）。宣言順を表示名として使う旧案は採用しない。無向Connectionの同一性と有向の移動方向は別概念であり、内部ID・格納型は未承認。
-- 理由: start再入場にSubjectの明示的禁止はなく、エラーの形を固定すると通常の移動出力と区別でき、移動方向順のトークンは方向の誤解を減らせる。
-- Subjectとの区別: start/end容量無制限はv2.0 VII.4、到達不能の検出・明確な報告はv2.0 VII.4、`D<ID>-<connection>`の形式はVII.5の明文。再入場の許容、stderrの文面と終了コード、Connection名の方向順は**開発者による具体化**であり、Subjectに書かれた追加要求とは扱わない。
-- 根拠: 2026-10-28 JSTまでのT01設計議論で、開発者がstart再入場の合法性、到達不能時の具体的報告、および「移動方向順にOutput」を順次明示承認。[T01集約コメント](https://github.com/AMkuro/Fly-in/issues/1#issuecomment-6465527632)に正常・違反例を含めて記録。
-- 現行契約: [移動・容量・スケジュール合法性](architecture.md#t01-movement-contract)。blockedへの進入禁止・Zone上の待機・priorityの移動コストはSubject明文であり、blockedを内部的に「実効容量0」として実装するかやpriorityの具体的な経路選択方式は、ここで確定しない。
-
 <a id="dec-003"></a>
 
 ## DEC-003 — 既存データ形式を固定しない
@@ -112,6 +88,30 @@
 - 理由: Subject v2.0 VII.6では、ターン数は合否にも成績にも影響せず、正しさとは独立に評価される。上限は廃止されたv1.2の一般目標に由来する。
 - 根拠: 2026-10-25 JSTのv2.0差分確認セッションで、開発者が廃止を明示回答。停止しない出力への対策（プロセスのタイムアウト）は対象外。
 - 関連Issue: 修正は[T10 / #10](https://github.com/AMkuro/Fly-in/issues/10)。現行の挙動は[development.md](development.md)の検証範囲を参照する。
+
+<a id="dec-012"></a>
+
+## DEC-012 — ターン全体の容量式とスケジュール合法性
+
+- 結論・状態: Connection容量の具体式と全スケジュールの不変条件を採用する（`ACCEPTED`、本体は未実装）。従来のOPEN-001を解決する。
+- Connection容量の契約: 全Connection `e`・ターン `t` について `0 <= B_e(t) - F_e(t) + S_e(t) + N_e(t) <= C_e`。ここで`B`はターン開始時にConnection上にいる機体数、`F`は同ターンのConnectionからの到着数、`S`は同ターンのrestrictedへ向けた進入数、`N`は通常移動による同Connectionの通過数（双方向合計）、`C`は`max_link_capacity`。合法なrestrictedの強制到着では`B=F`であり、`S+N<=C`と簡約できる。ただし、強制到着の機体別判定は省略しない。
+- Zoneと合法性の契約: 同時出発・到着を集計した`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`が、start/end以外の全Zoneで`0<=O_z(t+1)<=C_z`を満たす。各ターンの合法性は、移動規則、Zone容量、Connection容量、restricted強制到着の論理積。全ターンの合法性と、有限の終了ターンでの全機体`AtZone(end)`を全スケジュールに要求する。最短ターン数の証明は別であり、ここでは確定しない。
+- 理由: v2.0の同時移動・同ターン容量解放に整合し、通常移動・双方向共有・restricted到着と後続進入を同じ式で判定できる。各機体の逐次更新順序に依存させない。
+- 根拠: 2026-10-28 JST、この会話で開発者が「Connection容量の式は今のところ問題が見られないから採用」「T01で確定すべき不変条件にも問題はない」と明示回答。[T01の規則・手計算集約コメント](https://github.com/AMkuro/Fly-in/issues/1#issuecomment-6465527632)は承認内容の整理記録であり、コメント自体を独立した人間の承認と誤認しない。Subjectの根拠はv2.0 VII.2・VII.3。
+- 現行契約: [移動・容量・スケジュール合法性](architecture.md#t01-movement-contract)。実装方式、型、将来容量予約と再計画は[T02](https://github.com/AMkuro/Fly-in/issues/2)・[T03](https://github.com/AMkuro/Fly-in/issues/3)で扱う。
+
+<a id="dec-013"></a>
+
+## DEC-013 — T01の境界解釈・エラー報告・Connection出力
+
+- 結論・状態: 次の境界解釈と外部出力規則を採用する（`ACCEPTED`、本体は未実装）。
+  - **startへの再入場**: 一度startを出たドローンが戻ることを禁止しない。隣接性・Connection容量等が満たされれば合法。startに容量上限はない。最適な経路として戻る意義が乏しいことと合法性は別とする。
+  - **到達不能**: 入力構文の検証とは区別し、startからendへの経路がない場合はシミュレーション開始前に検出して終了。標準エラー出力（stderr）に`Error: No path from start to end.`を出し、終了コード`1`を返す。
+  - **Connection出力**: restricted移動中の`D<ID>-<connection>`は、**出発元-到着先**の移動方向順（例: 入力が`connection: R-A`でも、A→Rは`D1-A-R`、翌ターンの到着は`D1-R`）。宣言順を表示名として使う旧案は採用しない。無向Connectionの同一性と有向の移動方向は別概念であり、内部ID・格納型は未承認。
+- 理由: start再入場にSubjectの明示的禁止はなく、エラーの形を固定すると通常の移動出力と区別でき、移動方向順のトークンは方向の誤解を減らせる。
+- Subjectとの区別: start/end容量無制限はv2.0 VII.4、到達不能の検出・明確な報告はv2.0 VII.4、`D<ID>-<connection>`の形式はVII.5の明文。再入場の許容、stderrの文面と終了コード、Connection名の方向順は**開発者による具体化**であり、Subjectに書かれた追加要求とは扱わない。
+- 根拠: 2026-10-28 JSTまでのT01設計議論で、開発者がstart再入場の合法性、到達不能時の具体的報告、および「移動方向順にOutput」を順次明示承認。[T01集約コメント](https://github.com/AMkuro/Fly-in/issues/1#issuecomment-6465527632)に正常・違反例を含めて記録。
+- 現行契約: [移動・容量・スケジュール合法性](architecture.md#t01-movement-contract)。blockedへの進入禁止・Zone上の待機・priorityの移動コストはSubject明文であり、blockedを内部的に「実効容量0」として実装するかやpriorityの具体的な経路選択方式は、ここで確定しない。
 
 <a id="open-items"></a>
 
