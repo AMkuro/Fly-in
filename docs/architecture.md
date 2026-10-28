@@ -35,19 +35,78 @@
 Pythonクラスの定義、格納方法、履歴との関係は未承認で、`AtZone`自体も未実装。
 採用理由は[DEC-001](decisions.md#dec-001)を参照する。
 
-### Connection容量の確認済み部分
+<a id="t01-movement-contract"></a>
 
-Connectionの占有はターン終了時の状態を基準としてよく、容量は双方向で共有する。
-これは仲間への確認に基づく`CONFIRMED`の解釈で、Subject本文の引用ではない。
-Subject v2.0 VII.3は次の2点を明文で定める。
+### T01 — 同時移動・容量とスケジュール合法性
 
-- そのターンにZoneやConnectionから出る機体の分の容量は、同じターン内に別の機体が使える。
-- restricted Connectionは機体が到着先Zoneに着いたターンに空き、別の機体はそのターンから同じConnectionを渡り始めてよい。
+以下は**承認済みの規則・契約であり、Simulation本体への実装を意味しない**。Subject v2.0 VI・VII.2〜VII.5の明文と、プロジェクトが具体化した判定式・境界解釈を区別する。採否・根拠は[DEC-002](decisions.md#dec-002)・[DEC-012](decisions.md#dec-012)・[DEC-013](decisions.md#dec-013)、手計算例は[T01の集約コメント](https://github.com/AMkuro/Fly-in/issues/1#issuecomment-6465527632)を参照する。
 
-**それ以外の具体的な容量計算式は未承認・保留（OPEN-001）であり、上記だけから式を確定しない。**
-確認根拠と管理先は[DEC-002](decisions.md#dec-002)を参照する。
+#### 移動とZone占有
 
-既存検証器はrestricted移動の出発・到着ターン双方で利用数を加算しており、到着ターンの加算は上記の明文と矛盾する。
+- 全ドローンの行動はターン開始時の状態から決定し、**同一ターンの移動は同時**に行われる。ある機体を先に更新した結果で別機体の合法性を変えない（Subject v2.0 VII.3）。
+- 移動コストは**到着先Zoneのタイプ**に依存する。normal・priorityは1ターン、restrictedへの進入は2ターン、blockedへの進入・通過は禁止。priorityをどう優先して経路選択するかは[T03](https://github.com/AMkuro/Fly-in/issues/3)の対象。
+- Zone上の待機は可能であり、待機ターン数の上限は規定されていない。restrictedへのConnection上で追加待機はできず、進入の次ターンに必ず到着する（Subject v2.0 VII.3）。
+- start・endを除く各Zone `z` で、ターン `t` 開始時占有数 `O_z(t)`、今ターンの出発数 `D_z(t)`、到着数 `A_z(t)`、容量 `C_z` を定義する。restrictedへの進入は出発、Connectionからの到着は到着に含む。
+
+$$
+O_z(t+1)=O_z(t)-D_z(t)+A_z(t)
+$$
+
+$$
+\forall z\notin\{start,end\}:\quad 0\le O_z(t+1)\le C_z
+$$
+
+退出で空いたZone容量は**同じターン**に再利用できる（Subject v2.0 VII.3）。startとendは容量制限なし（VII.4）。startへの再入場も、他の移動・Connection制約を満たせば合法とする（[DEC-013](decisions.md#dec-013)）。
+
+#### Connection容量（OPEN-001を解決・ACCEPTED）
+
+Connectionは双方向の1本の辺であり、両方向の利用数を**同じ容量**へ合算する。仲間への確認に基づくターン終了基準と双方向共有は`CONFIRMED`（[DEC-002](decisions.md#dec-002)）。Subject v2.0 VII.3では、Connectionから退出した機体の分をそのターンに再利用でき、restricted移動中の機体が到着したターンにも別機体が同じConnectionを利用開始できると明記された。
+
+ターン `t` におけるConnection `e` の量を定義する。
+
+| 記号 | 意味 |
+|---|---|
+| `B_e(t)` | ターン開始時にrestricted移動中でConnection上にいる機体数 |
+| `F_e(t)` | 同ターンにConnectionから目的Zoneへ到着し退出する機体数 |
+| `S_e(t)` | 同ターンにrestrictedへ向けてConnectionへ進入する機体数 |
+| `N_e(t)` | 同ターンにConnectionを1ターンで通常通過する機体数（双方向合計） |
+| `C_e` | `max_link_capacity`（Connection容量） |
+
+開発者が承認した容量判定式：
+
+$$
+\boxed{0\le U_e(t)=B_e(t)-F_e(t)+S_e(t)+N_e(t)\le C_e}
+$$
+
+`U_e(t)`は**Connection容量の判定用利用量**であり、Connection上にターン終了時に残る機体数そのものではない。合法なrestricted移動では、Connection上にいる全機体は次ターンに必ず到着するため`F_e(t)=B_e(t)`。その条件下に限って`S_e(t)+N_e(t)\le C_e`と簡約できる。機体別の強制到着チェックをこの簡約によって省略してはならない。
+
+既存の[開発用検証器](../tools/verify_subject.py)はrestricted移動を到着ターンにも利用数へ加算する。この挙動はSubject v2.0 VII.3と上記契約に矛盾し、[T09](https://github.com/AMkuro/Fly-in/issues/5)で監査する。本体・検証器が承認式に対応済みだとは扱わない。
+
+#### ターン・全スケジュールの合法性
+
+`S_t`をターン開始状態、`M_t`を全機体の同ターン行動集合とし、次状態は`S_{t+1}=T(S_t,M_t)`と表す。ターンの合法性は、**移動規則（隣接性・blocked・コスト・到着後不動）、Zone容量、Connection容量、restrictedの強制到着**の論理積とする。
+
+$$
+Valid(S_t,M_t)=L_{move}(t)\land L_{zone}(t)\land L_{connection}(t)\land L_{restricted}(t)
+$$
+
+全スケジュールは、ある**有限の**終了ターン `T` に対し次を満たすこと。
+
+$$
+\forall t\in\{0,\ldots,T-1\}:\quad Valid(S_t,M_t)
+$$
+
+$$
+\forall i:\quad s_i(T)=AtZone(end)
+$$
+
+到着済みの機体は内部ではendを指す状態として保持し、その後は動かさない（[DEC-001](decisions.md#dec-001)）。これは**移動列の正当性と配送完了**の条件であり、最短ターン数の保証やアルゴリズム選定ではない。個々のターンが合法でも、restrictedの翌ターンの到着先が塞がる計画は全スケジュールとして不正となる。将来予約・先読み・競合解決の具体方式は[T02](https://github.com/AMkuro/Fly-in/issues/2)・[T03](https://github.com/AMkuro/Fly-in/issues/3)に委ねる。
+
+#### 出力・到達不能・境界判断
+
+- restrictedへの移動中は`D<ID>-<connection>`、Zone到着時は`D<ID>-<zone>`を出力する（Subject v2.0 VII.5）。Connection文字列は**移動方向順の`<出発元>-<到着先>`**を採用する。例えば`connection: R-A`であってもA→Rなら`D1-A-R`、到着ターンは`D1-R`。これは[DEC-013](decisions.md#dec-013)のプロジェクト判断であり、内部Connectionの同一性・ID方式を固定しない。
+- blockedは進入・通過不可（Subject明文）。実装上の「実効容量0」という表現は**未確定の実装選択**であり、入力の`max_drones`を0とすることはできない。
+- startからendへ到達不能なら、パースエラーとは区別して検出・明確に報告し、シミュレーション前に終了する。具体的な承認済み報告形式はstderrへの`Error: No path from start to end.`、終了コード`1`（[DEC-013](decisions.md#dec-013)）。動作の実装は未完了。
 
 ### start・endの容量
 
