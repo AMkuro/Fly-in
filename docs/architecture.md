@@ -125,4 +125,4 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 - BFS、A*、予約方式、最大フロー等の探索・競合解決方式。
 - 内部IDの文字列・整数の選択、探索失敗・再計画・終了条件。
 
-候補の詳細と未解決事項の管理先は[決定索引](decisions.md#open-items)を参照する。引き継ぎ記録のサンプル型をそのまま実装契約にしない。
+未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項の一覧は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。引き継ぎ記録のサンプル型をそのまま実装契約にしない。
