@@ -87,7 +87,7 @@
 - 結論・状態: 配布マップのターン数上限（easy 9 / medium 30 / hard 59）による不合格判定を廃止する（`ACCEPTED`、検証器は未修正）。
 - 理由: Subject v2.0 VII.6では、ターン数は合否にも成績にも影響せず、正しさとは独立に評価される。上限は廃止されたv1.2の一般目標に由来する。
 - 根拠: 2026-10-25 JSTのv2.0差分確認セッションで、開発者が廃止を明示回答。停止しない出力への対策（プロセスのタイムアウト）は対象外。
-- 関連Issue: 修正は[T10 / #10](https://github.com/AMkuro/Fly-in/issues/10)。現行の挙動は[development.md](development.md)の検証範囲を参照する。
+- 関連Issue: 修正は[T10 / #10](https://github.com/AMkuro/Fly-in/issues/10)。検証器の実挙動は[コード](../tools/verify_subject.py)・[テスト](../tests)で確認し、対応進捗はIssueを参照する。
 
 <a id="dec-012"></a>
 
