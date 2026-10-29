@@ -115,6 +115,17 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 検証器が到着済み機体を`delivered`集合で管理していることも、本体の到着状態契約の実装を意味しない。
 監査・整合性判断は別タスクとする。
 
+<a id="t03-pathfinding-policy"></a>
+
+### T03 — 探索基準方式（方針承認・詳細未確定）
+
+**基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)、2026-10-29開発者承認）。これは**アルゴリズム方針の承認であり、探索・Simulation本体の実装完了や最終的なT03のCloseを意味しない**。
+
+- 時刻を含む探索と、他機体が将来利用するZone・Connectionの容量確認を組み合わせ、T01の合法性（同時移動、restrictedの強制到着、双方向共有容量、start/end例外）を満たす全体計画を目指す。
+- 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
+- priorityの具体的優先規則、探索順序、再計画・予約取消し、失敗回復・停止条件は**未承認**。予約表や状態の具体的なPython型、所有者、Planner/Scheduler/Simulation間の共有契約も**未承認**であり、[T02](https://github.com/AMkuro/Fly-in/issues/2)と相互に検討する。
+- [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。これらを決める前に本体実装を開始しない。
+
 ## Proposed
 
 次は未承認で、現在有効な型・処理境界として採用しない。
@@ -122,7 +133,7 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 - State・Move・Plan・Reservation・Snapshotの正本と保存方法。
 - `InTransit`、`PlannedMove`、ターン状態遷移の具体的な型・入出力・エラー表現。
 - Planner / Schedulerの分割、予約処理、GUIへのSnapshot受渡し。
-- BFS、A*、予約方式、最大フロー等の探索・競合解決方式。
+- 採用済みの時間付き予約A*を具体化する探索・競合解決・再計画・停止方針、および他方式を追加するかどうか。
 - 内部IDの文字列・整数の選択、探索失敗・再計画・終了条件。
 
 未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項の一覧は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。引き継ぎ記録のサンプル型をそのまま実装契約にしない。
