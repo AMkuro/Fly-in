@@ -43,6 +43,17 @@ class DroneStateTests(unittest.TestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             InTransit("a", "b").to_zone = "c"  # type: ignore[misc]
 
+    def test_rejects_states_no_map_can_contain(self) -> None:
+        for name in ("", "a-b", "a b"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                AtZone(name)
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                InTransit(name, "z")
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                InTransit("z", name)
+        with self.assertRaises(ValueError):
+            InTransit("a", "a")
+
     def test_plan_example_with_restricted_move(self) -> None:
         # start -> r (restricted, 2 turns) -> end; index t is S_t.
         plan: list[DroneState] = [
