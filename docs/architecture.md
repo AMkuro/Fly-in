@@ -17,6 +17,7 @@
 | [Parser](../fly_in/parse/map_parser.py)、[RawMap生成](../fly_in/parse/raw_map_builder.py)、[検証アダプタ](../fly_in/parse/validation_adapter.py) | 読込・行解析・RawMap構築・Pydantic検証を分担する。`load()`の戻り値は`MapData`。入力構文の型は[map_format_def.py](../fly_in/parse/map_format_def.py)にある |
 | [MapData・Zone・Connection](../fly_in/model/map_data.py) | Pydanticで入力事実と構造上の制約を保持・検証する。Zoneは名前をキーとする辞書、Connectionはリスト。容量フィールドの存在は、ターンごとの容量計算式の承認を意味しない |
 | [MapGraph](../fly_in/model/map_graph.py) | `MapData`から隣接関係・Connection索引を構築する。Zone名は文字列、双方向Connectionの検索キーは名前の順序を正規化した組。blockedもトポロジーに残す。経路の合法性を計算する処理はまだない |
+| [DroneState](../fly_in/model/drone_state.py) | `AtZone(zone)`・`InTransit(from_zone, to_zone)`とその合併型`DroneState`。Zone名の文字列だけを持つ値オブジェクトで、Zone名の存在・隣接性・遷移の合法性は検証しない。`frozen dataclass`という具体型は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案であり、承認済み契約ではない。Plan・Reservation・StateHistoryからはまだ利用されていない |
 | [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | `MapData`に基づく静的描画と検査表示。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する。探索・移動合法性は判定しない |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品は存在する。Viewerには未接続で、Snapshot生成処理もない。`Sequence[object]`を承認済みSnapshot型とは扱わない |
 | [開発用検証器](../tools/verify_subject.py) | Parserが返す入力事実を使ってCLI出力を再生検証する。本体のGraph・探索・Schedulerは呼ばない。Simulation本体でも、Subject適合性の確定した根拠でもない |
@@ -32,7 +33,7 @@
 ### 到着済みの状態
 
 本体の状態モデルでは、end到着後も`AtZone(goal)`として保持し、endを指すことから到着を判定する。到着後は移動させない。
-Pythonクラスの定義、格納方法、履歴との関係は未承認で、`AtZone`自体も未実装。
+`AtZone`の型は[実装済みの表](#implemented)のDroneStateにあるが、格納方法・履歴との関係を実装した処理はまだない。
 採用理由は[DEC-001](decisions.md#dec-001)を参照する。
 
 <a id="t01-movement-contract"></a>
