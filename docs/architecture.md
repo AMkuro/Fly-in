@@ -125,6 +125,8 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 #### 状態と時刻
 
 - Droneの物理状態は概念上`AtZone / InTransit`の2種類。到着済みは`AtZone(end)`で保持し、以後の移動は許可せず移動トークンにも含めない（[DEC-001](decisions.md#dec-001)）。
+- **状態の場所情報はZone名（`str`）で保持する**（[DEC-026](decisions.md#dec-026)）。概念上、`AtZone`は`zone: str`、`InTransit`は`from_zone: str`と`to_zone: str`を持つ。Zone/Connectionのオブジェクト参照を状態内に保存しない。移動中の出発元・到着先の順序はConnection上の方向を表す。
+- 位置・経路の利用者（Planner、Scheduler、Simulation、Renderer等）は必要なマップ属性を`MapGraph.zone(zone_name)`、接続を`MapGraph.connection_between(from_zone, to_zone)`で参照する。MapGraphのZone・Connection情報を状態へ複製しない。無効なZone名・接続・移動は検証時に拒否するが、構築時にどこまで検証するかは未決。
 - `S_0`は初期状態、`S_t`はターン`t`の開始状態。ターン`t`の同時行動で`S_(t+1)`になる。外部移動出力の第1行は`S_0 → S_1`に対応する。
 - `TurnState`は概念上1時点の全Drone状態。`StateHistory`は`S_0, S_1, …`の確定済み状態列。**各ターンの全Drone状態を保存する履歴方式A**を採用する。確定済みの過去状態は変更せず、CUIの調査やGUIの巻き戻し・再生に利用する。
 
@@ -152,7 +154,7 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 
 #### T02の未決事項
 
-- `AtZone / InTransit / TurnState / Reservation / StateHistory / Move / Snapshot`の具体的なPython型、フィールド、所有者と読取API。Planは`list[DroneState]`相当とするが、状態要素の具体型と別名の定義方法は未決。
+- `AtZone / InTransit`の**場所フィールド（Zone名`str`）は決定済み**。その具体的なPython型（dataclass等）、`DroneState`の型別名、`TurnState / Reservation / StateHistory / Move / Snapshot`のフィールド・所有者・読取APIは未決。Planは`list[DroneState]`相当（[DEC-025](decisions.md#dec-025)）。
 - Planのend到着後の状態の扱い、予約キャッシュの更新/無効化と原子性の実装方法、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
 - 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
 
@@ -177,7 +179,7 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 
 次は未承認で、現在の[部分承認済みT02契約](#t02-state-sharing-contract)および[T03方針](#t03-pathfinding-policy)を取り消すものではない。
 
-- State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、`InTransit`のフィールド、所有者・読取API。Planは[DEC-025](decisions.md#dec-025)で時刻添え字の状態リストとして承認済み。
+- State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、所有者・読取API。Planのリスト表現は[DEC-025](decisions.md#dec-025)、`AtZone / InTransit`のZone名フィールドは[DEC-026](decisions.md#dec-026)で承認済み。
 - 予約キャッシュの更新/無効化、Planの時刻範囲、原子的な経路追加・Simulation検証失敗の具体的な実装契約。
 - 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
 - RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
