@@ -216,7 +216,7 @@
 - 容量: 追加時に[DEC-012](#dec-012)のZone容量式`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`、Connection容量式`0<=B_e(t)-F_e(t)+S_e(t)+N_e(t)<=C_e`を含む全移動規則を検証する。Connectionは双方向合算・通常1ターン通過も数え、状態間の遷移から利用量を導出する。キャッシュを独立の正本にしない。
 - 履歴との関係: `AtZone / InTransit`の**状態要素は共通**にできるが、Reservationは計画済み経路集合、StateHistoryは全Droneの確定済み時系列状態であり、保存構造まで同一にしない。全未計画機体を各時刻で明示初期化する案は採用しない。
 - 理由: 同一条件の機体に不要な予約状態を生成せず、予約付きA*の容量照会をキャッシュで支援する。
-- 未決: 容量キャッシュの具体形式・更新/無効化、時刻範囲、ID付与時点、具体型/API。
+- 当時の未決: 容量キャッシュの具体形式・更新/無効化、時刻範囲、ID付与時点、具体型/API。**Planのリスト表現とID割当てについては後続[DEC-025](#dec-025)で具体化した。**
 - 承認根拠: [T02部分承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)、[未計画機体についての追加承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6518333828)（2026-10-30 JST）。
 - 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
 
@@ -227,8 +227,8 @@
 - 結論・状態: **Plannerが返す1機分のPlanは、各時刻の`AtZone / InTransit`状態列を基準に表す**。Plannerは候補だけを返し、Schedulerが検証してから**原子的にReservationへ反映する案B**を採用する（`ACCEPTED`、未実装）。
 - 責務: PlannerはReservationを参照してendまでの時刻付き全経路候補を探索（[DEC-014](#dec-014)・[DEC-015](#dec-015)）。Schedulerは計画順、探索パラメータ変更、候補採否と予約確定、全体再試行・最良完成計画の保持を担当（[DEC-016](#dec-016)）。SchedulerからPlannerへの再探索・条件変更の指示を認める。Plannerは**確定Reservationを直接変更しない**。
 - 検証: 候補経路の全対象ターンについてT01の同時移動、Zone/Connection容量、restrictedの強制到着、blocked、到着後不動を確認する。状態系列と導出キャッシュの整合を保ち、失敗時に部分予約を残さない。
-- Simulation: 全機体の計画完成後（[DEC-019](#dec-019)）、Simulationが独立に合法性・全機体到着を検証し、確定StateHistoryを生成する。出力・再生は検証済み履歴に基づく。経路追加時か完成時かのDrone ID割当ては未決だが、出力・履歴中の対応は一貫させる。
-- 未決: 各型・ID・Planの時刻範囲、予約更新の具体的トランザクション、検証API、内部エラーとフォールバック切替契約。
+- Simulation: 全機体の計画完成後（[DEC-019](#dec-019)）、Simulationが独立に合法性・全機体到着を検証し、確定StateHistoryを生成する。出力・再生は検証済み履歴に基づく。**ID割当てのタイミングと対応付けは後続[DEC-025](#dec-025)で具体化した。**
+- 当時の未決: 各型・ID・Planの時刻範囲、予約更新の具体的トランザクション、検証API、内部エラーとフォールバック切替契約。**Planの格納形式・添え字規約・ID割当てについては[DEC-025](#dec-025)で決定済み。**
 - 承認根拠: [T02部分承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)と、2026-10-30 JSTの開発者判断「各時刻の状態列を基準にする案でいいと思う」。
 - 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
 
@@ -241,3 +241,16 @@
 - 未決: 最終的な表示モードとRenderer/Snapshotの具体API。
 - 承認根拠: [T02部分承認コメント](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)。
 - 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
+
+<a id="dec-025"></a>
+
+## DEC-025 — Planは時刻添え字の状態リストとし、Drone IDを後付けする
+
+- 結論・状態: **1機分のPlanは`list[DroneState]`相当のリスト**とし、添え字`t`が時刻、要素`plan[t]`がその時刻の`AtZone`または`InTransit`の物理状態を表す（`ACCEPTED`、未実装）。状態ごとに時刻フィールドを重複保持しない。Plan自体にDrone IDや識別子を持たせない。
+- 時刻基準: `plan[0]`は初期状態`S_0`、`plan[t]`は`S_t`に対応する。出発まで待つ場合も`AtZone(start)`を連続して記録する。restricted移動はConnection上の`InTransit`と翌時刻の到着状態として表す。Planは実際のendまでの全経路候補とする（[DEC-015](#dec-015)）。
+- ID: 全機体のPlan確定後、**確定計画のリスト順で1始まりのDrone IDを割り当てる**（`plans[0]` → Drone 1、`plans[1]` → Drone 2、…）。この対応をSimulation・StateHistory・移動出力・GUIで一貫させ、経路途中で入れ替えない。Plan単体に個体識別情報は不要。
+- 変更可能性: **リストを使うことと、予約確定後の変更を許すことは別**。Plannerが組み立てた候補は可変でよいが、SchedulerがReservationへ確定追加した後、その経路の状態列は変更しない（導出した容量キャッシュとの整合性を守る）。コピー・読み取り専用ビューなど具体的な保証手段は未決。
+- 理由: 時刻`t`から直接状態へアクセスでき、位置と時刻を別途重複管理しない。全機体は同じstart/endと移動条件を持つため、探索・予約段階にDrone IDを持ち込まず、出力時に必要となる一意で安定した識別子だけを後から与えればよい。独立した`Plan`クラスは現時点で必須としない。
+- なお未決: `AtZone / InTransit`の具体的なフィールドと型、Planの最終状態以降をどう扱うか、Reservationが確定計画を保護する具体的方式、キャッシュの更新・検証API。
+- 承認根拠: 2026-10-30 JSTのT02設計議論。開発者が「tupleじゃなくてlist」「添え字が時間で入る値が情報」「Planは識別しなくてもいい」「Drone IDは後付けでもよい」という整理に「それで採用」と明示承認。
+- 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / Issue #2](https://github.com/AMkuro/Fly-in/issues/2)。
