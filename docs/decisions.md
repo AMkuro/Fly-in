@@ -266,3 +266,18 @@
 - 非決定事項: `AtZone`と`InTransit`を`dataclass`、PydanticなどのどのPython型で実装するか、具体的な不変性の実現方法、`DroneState`の型別名・配置先は未決。この決定は[DEC-025](#dec-025)の`list[DroneState]`表現と組み合わせる。
 - 承認根拠: 2026-10-30 JST、開発者が「案Bにするか」と明示して、Zone名を格納しMapGraphが参照解決する方式を採用。
 - 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)。
+
+<a id="dec-027"></a>
+
+## DEC-027 — Reservationの疎な時刻別容量キャッシュと差分検証
+
+- 結論・状態: Reservationの正本は既存の確定済みPlan集合（[DEC-022](#dec-022)・[DEC-025](#dec-025)）とし、容量照会用に**時刻を第1キーとする疎な辞書**を採用する（`ACCEPTED`、未実装）。概念上のキー構造は`zone_occupancy[t][zone_name]`と`connection_usage[t][connection_key]`。使用数0のキーは省略でき、参照時は0として扱う。各容量値はMapGraphを参照し、キャッシュに静的容量定義を複製しない。
+- **時刻の区別**: `zone_occupancy[t]`は**状態`S_t`にいるDrone数**を表す（start/endは容量無制限なので省略）。`connection_usage[t]`は**移動ターン`t`、すなわち`S_t → S_(t+1)`での容量判定用使用量**を表す。時点の占有とターン中の使用量を混同しない。
+- **Zone差分の生成**: 新規候補Planの全`plan[t]`を読み、`AtZone(z)`かつ`z`がstart/end以外なら`delta_zone[t][z]`を1増やす。`InTransit`はZone占有に算入しない。すべてのPlanはstartからendへの完全経路なので、Plan終了後はendに留まるものとみなせば容量キャッシュを無限延長する必要はない。
+- **Connection差分の生成**: 候補の連続状態`plan[t]`と`plan[t+1]`から、ターン`t`のConnection使用を数える。通常1ターンの`AtZone(a) → AtZone(b)`の通過と、restricted進入の`AtZone(a) → InTransit(a,b)`は、それぞれ無向キー`connection_key(a,b)`の`delta_connection[t]`へ1を加える。合法なrestricted強制到着`InTransit(a,b) → AtZone(b)`は**退出による同ターン容量再利用が認められるため、新規使用量を加算しない**。待機はConnection使用なし。
+- **T01との整合**: Connection一般式`U_e(t)=B_e(t)-F_e(t)+S_e(t)+N_e(t)`を満たす遷移だけを合法とし、合法なrestricted移動の`B_e(t)=F_e(t)`の場合に限り、上記キャッシュは`S_e(t)+N_e(t)`に相当する。**強制到着の検証を省略する許可ではない**。Zone容量もT01の同時移動後の`S_(t+1)`で評価する。
+- **差分検証・確定**: 候補Planについて既存Reservationを変更せず、遷移合法性を確認し`delta_zone`・`delta_connection`を作成する。全関連時刻・資源で`既存使用量+差分<=容量`を確認し、成功時にのみ**Planの追加とキャッシュ更新を一体の確定操作として反映**する。不合格なら差分を破棄し既存Reservationは維持する。正本とキャッシュは常に整合し、後から全確定Planを走査してキャッシュを再生成できる。
+- 理由: 時刻・資源を指定したA*の容量照会を辞書の平均O(1)で行え、未使用時刻・資源の割当てを省ける。先に差分を計算することで、ロールバック漏れによる部分更新を避ける。
+- なお未決: 実装上のトランザクション保証と例外時の安全性、検証/更新API、キャッシュのコピー・再構築・読取公開契約、Planと状態値を確定後に変更不可とする手段、検証処理の具体的な所有分担。形式を採用したことは、キャッシュだけで全移動合法性が保証できるという意味ではない。
+- 承認根拠: 2026-10-30 JSTのT02議論で、開発者が「推奨する組み合わせで問題ない」「キャッシュ生成を詳しく教えて」への説明後、「それでいいと思う」と回答し、疎な時刻別キャッシュと差分検証・反映および生成規則を採用。
+- 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)。
