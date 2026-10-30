@@ -225,7 +225,9 @@
 ## DEC-023 — 時刻付き状態列PlanとSchedulerによる原子的予約確定
 
 - 結論・状態: **Plannerが返す1機分のPlanは、各時刻の`AtZone / InTransit`状態列を基準に表す**。Plannerは候補だけを返し、Schedulerが検証してから**原子的にReservationへ反映する案B**を採用する（`ACCEPTED`、未実装）。
+- 後続の責務変更: 上記の「Schedulerが検証して反映」は当時の承認内容。**現行契約では[DEC-028](#dec-028)によって、検証・原子的追加の操作をReservation自身が所有する**。Schedulerはその操作を依頼し結果を使って試行を制御する。
 - 責務: PlannerはReservationを参照してendまでの時刻付き全経路候補を探索（[DEC-014](#dec-014)・[DEC-015](#dec-015)）。Schedulerは計画順、探索パラメータ変更、候補採否と予約確定、全体再試行・最良完成計画の保持を担当（[DEC-016](#dec-016)）。SchedulerからPlannerへの再探索・条件変更の指示を認める。Plannerは**確定Reservationを直接変更しない**。
+- 後続の責務変更: 候補が合法かどうかの判定と確定予約の変更処理は[DEC-028](#dec-028)でReservationへ移管。Schedulerの探索方針調整・全体計画比較の責務は維持。
 - 検証: 候補経路の全対象ターンについてT01の同時移動、Zone/Connection容量、restrictedの強制到着、blocked、到着後不動を確認する。状態系列と導出キャッシュの整合を保ち、失敗時に部分予約を残さない。
 - Simulation: 全機体の計画完成後（[DEC-019](#dec-019)）、Simulationが独立に合法性・全機体到着を検証し、確定StateHistoryを生成する。出力・再生は検証済み履歴に基づく。**ID割当てのタイミングと対応付けは後続[DEC-025](#dec-025)で具体化した。**
 - 当時の未決: 各型・ID・Planの時刻範囲、予約更新の具体的トランザクション、検証API、内部エラーとフォールバック切替契約。**Planの格納形式・添え字規約・ID割当てについては[DEC-025](#dec-025)で決定済み。**
@@ -277,7 +279,22 @@
 - **Connection差分の生成**: 候補の連続状態`plan[t]`と`plan[t+1]`から、ターン`t`のConnection使用を数える。通常1ターンの`AtZone(a) → AtZone(b)`の通過と、restricted進入の`AtZone(a) → InTransit(a,b)`は、それぞれ無向キー`connection_key(a,b)`の`delta_connection[t]`へ1を加える。合法なrestricted強制到着`InTransit(a,b) → AtZone(b)`は**退出による同ターン容量再利用が認められるため、新規使用量を加算しない**。待機はConnection使用なし。
 - **T01との整合**: Connection一般式`U_e(t)=B_e(t)-F_e(t)+S_e(t)+N_e(t)`を満たす遷移だけを合法とし、合法なrestricted移動の`B_e(t)=F_e(t)`の場合に限り、上記キャッシュは`S_e(t)+N_e(t)`に相当する。**強制到着の検証を省略する許可ではない**。Zone容量もT01の同時移動後の`S_(t+1)`で評価する。
 - **差分検証・確定**: 候補Planについて既存Reservationを変更せず、遷移合法性を確認し`delta_zone`・`delta_connection`を作成する。全関連時刻・資源で`既存使用量+差分<=容量`を確認し、成功時にのみ**Planの追加とキャッシュ更新を一体の確定操作として反映**する。不合格なら差分を破棄し既存Reservationは維持する。正本とキャッシュは常に整合し、後から全確定Planを走査してキャッシュを再生成できる。
+- 所有責務の後続決定: 差分作成・合法性判定・追加の操作は[DEC-028](#dec-028)によりReservationが提供する。Schedulerによる直接検証・キャッシュ更新は行わない。
 - 理由: 時刻・資源を指定したA*の容量照会を辞書の平均O(1)で行え、未使用時刻・資源の割当てを省ける。先に差分を計算することで、ロールバック漏れによる部分更新を避ける。
 - なお未決: 実装上のトランザクション保証と例外時の安全性、検証/更新API、キャッシュのコピー・再構築・読取公開契約、Planと状態値を確定後に変更不可とする手段、検証処理の具体的な所有分担。形式を採用したことは、キャッシュだけで全移動合法性が保証できるという意味ではない。
 - 承認根拠: 2026-10-30 JSTのT02議論で、開発者が「推奨する組み合わせで問題ない」「キャッシュ生成を詳しく教えて」への説明後、「それでいいと思う」と回答し、疎な時刻別キャッシュと差分検証・反映および生成規則を採用。
 - 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)。
+
+<a id="dec-028"></a>
+
+## DEC-028 — Reservationが候補Planの検証と追加を所有し、Schedulerは探索試行を調整する
+
+- 結論・状態: **Reservationが候補Planの合法性検証・容量差分計算・確定済みPlanへの追加・容量キャッシュ更新を一体の操作として所有する**（`ACCEPTED`、未実装）。Scheduler自身がT01の容量式や状態遷移の合法性を検証・キャッシュ更新する責務は持たない。従来の[DEC-023](#dec-023)の「Schedulerが検証してから反映」は、この決定で**責務の配置を変更**した。
+- **Reservationの責務**: 既存予約を参照して候補Planの時刻付き状態遷移（隣接性・blocked・normal/restricted移動・翌ターンの強制到着・end到着後不動・start/end例外）を検証する。Zone/Connectionの差分を生成し、既存容量キャッシュとMapGraph容量値を照合して合法性を判定する。成功した候補のみ**Planとキャッシュを整合した状態で原子的に追加**する。不合格なら既存の正本・キャッシュは変更しない。
+- **Schedulerの責務**: Plannerへ探索パラメータや再探索を指示し、生成された候補PlanをReservationの検証・追加操作に渡す。失敗結果を受けて条件・計画順を変更し、全体の試行をやり直す。合法な完成計画同士をMakespanで比較し最良計画を保持する（[DEC-016](#dec-016)〜[DEC-018](#dec-018)）。**合法性判定はReservationに委ね、Schedulerは試行・選択・改善のオーケストレーションに集中**する。
+- **PlannerとSimulation**: PlannerはReservationを参照し、1機分の候補を探索するだけで確定予約を直接変更しない。Simulationは全機体の計画完成後、Reservationの承認を盲信せず、T01の移動・容量・到着規則を**独立に検証**してStateHistoryを作る（[DEC-019](#dec-019)）。
+- **不変条件**: Reservationの正本は確定済みPlan集合。容量キャッシュはPlanから導出できる（[DEC-027](#dec-027)）。失敗した追加でPlanもキャッシュも部分変更しない。全体再試行は別のReservationを使い、保持済みの最良完成計画を失敗試行で壊さない。
+- 理由: Reservation自身が所有する容量キャッシュとPlan集合の整合性を自ら保証できる。Schedulerに複雑な合法性・更新処理を重複させず、探索パラメータ調整とMakespan改善の責務に集中できる。
+- 未決: 候補追加API名・引数・結果型、合法性エラーの粒度、例外時の原子性を実現する具体的方法、純粋な遷移検証ロジックをSimulationと共有するかどうか。Reservationが検証責務を持つことは**同じ検証コードをSimulationが呼ぶ義務**を意味しない。
+- 承認根拠: 2026-10-30 JST、開発者が「Reservationに検証・追加の操作を持たせる。Schedulerは色々試行錯誤してみるだけ」と明示承認。
+- 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 Issue #2](https://github.com/AMkuro/Fly-in/issues/2)。
