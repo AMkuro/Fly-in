@@ -130,7 +130,8 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 
 #### PlanとReservation
 
-- **1機分のPlanは、各時刻の`AtZone / InTransit`状態列を基準表現とする**。Plannerは既存のReservationを参照して、実際のendまでの時刻付き全経路候補を返す（[DEC-015](decisions.md#dec-015)）。
+- **1機分のPlanは、時刻を添え字とする`list[DroneState]`相当の状態リスト**とする（[DEC-025](decisions.md#dec-025)）。`plan[t]`は時刻`t`の`AtZone / InTransit`を表し、個々の状態要素に時刻を重複保存しない。`plan[0]`は`S_0`、`plan[t]`は`S_t`に対応する。startで待機する時刻も`AtZone(start)`を記録する。Plannerは既存のReservationを参照して実際のendまでの全経路候補を返す（[DEC-015](decisions.md#dec-015)）。**Plan自身にDrone IDは持たせず、専用Planクラスも必須としない。**
+- **IDの割当て**：全機体のPlanが確定した後、**確定計画のリスト順に1始まりのDrone ID**を割り当てる（`plans[0]`がDrone 1）。Simulation・StateHistory・CLI・GUIはこの対応を共有し、移動途中で機体IDを交換しない。確定Reservationの中の`list`は後から変更せず、キャッシュ整合性を守る。変更防止・コピーの具体実装は未決（[DEC-025](decisions.md#dec-025)）。
 - **Reservationは計画済みDroneの時刻付き全経路を順次追加**する構造を採用する。未計画Droneはstartで待機するとみなすが、未計画機体の各時刻の`AtZone(start)`をReservationに保存しない。全機体数`K`と予約済み経路数`P`から未計画数`K-P`を得られる（1経路が1機体を表すことを前提とする）。`Unplanned`という物理状態・計画済み集合を追加する必要はない。
 - ReservationとStateHistoryは**状態要素を共通化**するが、**格納構造まで同一とはしない**。前者は全機体計画が未完成でも使う個別経路集合、後者は検証済み全機体の時系列状態。
 - Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする。定義容量は静的MapGraphのものを参照する。1ターンで通過するConnectionの利用数も必要なため、同時刻の位置だけでなく連続する状態間の移動を参照して導出する。
@@ -151,8 +152,8 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 
 #### T02の未決事項
 
-- `AtZone / InTransit / TurnState / Plan / Reservation / StateHistory / Move / Snapshot`の具体的なPython型、フィールド、内部ID、所有者と読取API。
-- Planの時刻範囲・終端状態の扱い、予約キャッシュの更新/無効化と原子性の実装方法、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
+- `AtZone / InTransit / TurnState / Reservation / StateHistory / Move / Snapshot`の具体的なPython型、フィールド、所有者と読取API。Planは`list[DroneState]`相当とするが、状態要素の具体型と別名の定義方法は未決。
+- Planのend到着後の状態の扱い、予約キャッシュの更新/無効化と原子性の実装方法、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
 - 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
 
 <a id="t03-pathfinding-policy"></a>
@@ -176,7 +177,7 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 
 次は未承認で、現在の[部分承認済みT02契約](#t02-state-sharing-contract)および[T03方針](#t03-pathfinding-policy)を取り消すものではない。
 
-- State・Move・Plan・Reservation・StateHistory・Snapshotの具体的なPython型、`InTransit`のフィールド、内部ID、所有者・読取API。
+- State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、`InTransit`のフィールド、所有者・読取API。Planは[DEC-025](decisions.md#dec-025)で時刻添え字の状態リストとして承認済み。
 - 予約キャッシュの更新/無効化、Planの時刻範囲、原子的な経路追加・Simulation検証失敗の具体的な実装契約。
 - 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
 - RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
