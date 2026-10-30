@@ -180,7 +180,19 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 - **priority Zoneの選好は同着時優先**（[DEC-020](decisions.md#dec-020)）。合法な候補経路同士のend到着時刻が等しい場合にpriority経由を選好し、priorityだけを理由に到着が遅い経路を選ばない。移動コストはnormal同様1ターン。Schedulerの全体計画採否はMakespanを第一基準とする。priority経由の評価尺度・分散評価との同着時の詳細比較は未決。
 - 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
 - priority経由の同着候補間の詳細な比較規則、経路分散の評価式（Prim法による木の特徴量利用も未採用）、priority以外の同着候補選択規則、**採用済み停止規則を実現する具体的な予算値・下界算出方法**、フォールバック用静的経路の選択方式は**未承認**。予約表や状態の具体的なPython型、所有者、Planner/Scheduler/Simulation間の共有契約も一部のみ承認済みであり、[T02](https://github.com/AMkuro/Fly-in/issues/2)と相互に検討する。
-- [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。これらを決める前に本体実装を開始しない。
+- [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。ただし、**T02・T03全体の完了を実装の一律の開始条件とはせず**、承認済み範囲の小単位から実装・テストを並行できる（[DEC-029](decisions.md#dec-029)）。新しい設計判断は引き続き人間の承認を要する。
+
+<a id="incremental-implementation-policy"></a>
+
+### 実装への移行 — 承認済み範囲から段階的に着手
+
+[DEC-029](decisions.md#dec-029)により、**T02・T03の未決事項をすべて解消するまで本体の全実装を停止する運用は採用しない**。既存のT01合法性契約、T02の部分承認済み状態・予約契約、T03の採用済み探索方針を守り、**限定した実装単位のAI実装・単体テストと、人間による読解・レビューを並行**して進める。実装できた範囲と未決事項を区別し、Issue完了を偽らない。
+
+- **初回の実装対象**：T06（[Issue #7](https://github.com/AMkuro/Fly-in/issues/7)）の一部として、`AtZone(zone: str)`・`InTransit(from_zone: str, to_zone: str)`・`DroneState`の具体化と小規模な単体テスト。Python型の具体方式など未承認部分は実装案と理由をレビュー可能にし、重要な契約変更は人間が採否を決める。最初からScheduler・Planner・Reservation・Simulation全部を生成しない。
+- **後続の目安（自動の一括承認ではない）**：Reservation（T01合法性と容量キャッシュ・確定時整合性）→Simulation（独立検証・StateHistory・規定CLI出力）→静的逐次配送のフォールバックとPlanner/Schedulerの時間付き予約A*・全体再試行。各工程は必要になった契約の承認済み範囲に限定する。
+- **検証と読解**：小単位ごとに、差分・採用理由・データフロー・不変条件・反例を提示し、手計算したテストや独立の確認で点検する。対象テスト・flake8・mypyも実行して結果を記録する。AIが生成したことやテスト成功だけを正当性の根拠としない。
+- **依然未決**：Reservationの詳細な例外時原子性・API、Simulationの詳細型とエラー、Rendererの型と最終表示方式、T03の経路分散評価・探索予算・その他の最適化詳細。具体的に必要になる工程で判断し、`OPEN`・`PROPOSED`を独断で確定しない。
+- **提出ゲートは維持**：通常の開発作業を許可しても、`master`・42提出リポジトリへの反映は別途人間のレビューと明示承認を要する。作業ルールは[AGENTS.md](../AGENTS.md)、進捗・受け入れ条件はT02/T03/T06/T07のIssuesを正本とする。
 
 ## Proposed
 
