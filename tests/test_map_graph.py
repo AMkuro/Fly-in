@@ -61,8 +61,14 @@ class MapGraphTests(unittest.TestCase):
                     [sys.executable, "fly-in.py", str(path)],
                     capture_output=True, text=True, timeout=10,
                 )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("4 zones, 4 connections", result.stdout)
+                if "end" in blocked:
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(
+                        result.stderr, "Error: No path from start to end.\n"
+                    )
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(result.stdout.startswith("D1-"))
 
     def test_provided_maps_build_graphs(self) -> None:
         paths = sorted(Path("maps").glob("*/*.txt"))

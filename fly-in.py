@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from fly_in.orchestra import FlyInApp
+from fly_in.pathfinding.simple_dijkstra import NoPathError
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -48,6 +49,9 @@ def main(argv: list[str]) -> int:
     except KeyboardInterrupt:
         print()
         return 0
+    except NoPathError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
     except Exception as error:
         print(f"Configuration error: {error}", file=sys.stderr)
         return 1
