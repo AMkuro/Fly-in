@@ -11,6 +11,7 @@ import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
 from tkinter import ttk
+from typing import Literal
 
 from fly_in.model.map_data import Connection, MapData, Zone, ZoneType
 from fly_in.rendering.color_resolver import ColorResolver
@@ -228,21 +229,16 @@ class MapView(ttk.Frame):
         tags: tuple[str, str],
     ) -> int:
         """Create the main zone circle with type-specific outline options."""
-        options: dict[str, object] = {
-            "fill": fill,
-            "outline": outline,
-            "width": width,
-            "tags": tags,
-        }
-        dash = self._zone_outline_dash(zone)
-        if dash is not None:
-            options["dash"] = dash
         return self._canvas.create_oval(
             center.x - radius,
             center.y - radius,
             center.x + radius,
             center.y + radius,
-            **options,
+            fill=fill,
+            outline=outline,
+            width=width,
+            tags=tags,
+            dash=self._zone_outline_dash(zone) or (),
         )
 
     def _draw_priority_inner_outline(
@@ -311,9 +307,9 @@ class MapView(ttk.Frame):
         y: float,
         text: str,
         fill: str,
-        font: tuple[object, ...],
+        font: tuple[str, int] | tuple[str, int, str],
         tags: tuple[str, str],
-        anchor: str = "center",
+        anchor: Literal["center", "n", "s"] = "center",
     ) -> None:
         """Draw a label with a dark outline for readability."""
         label_tags = (*tags, "label")
