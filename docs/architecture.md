@@ -122,6 +122,7 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 **基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)、2026-10-29開発者承認）。これは**アルゴリズム方針の承認であり、探索・Simulation本体の実装完了や最終的なT03のCloseを意味しない**。
 
 - 時刻を含む探索と、他機体が将来利用するZone・Connectionの容量確認を組み合わせ、T01の合法性（同時移動、restrictedの強制到着、双方向共有容量、start/end例外）を満たす全体計画を目指す。
+- **初期Plannerは、実際のendまでの全経路候補を探索する**（[DEC-015](decisions.md#dec-015)）。時間窓・中間地点ゴールによる部分経路は初期基準方式に含めず、必要になった場合の拡張候補として残す。経路候補を受け取ってから、Schedulerが検証・予約反映するというT02の部分承認方針を踏まえる。
 - 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
 - priorityの具体的優先規則、探索順序、再計画・予約取消し、失敗回復・停止条件は**未承認**。予約表や状態の具体的なPython型、所有者、Planner/Scheduler/Simulation間の共有契約も**未承認**であり、[T02](https://github.com/AMkuro/Fly-in/issues/2)と相互に検討する。
 - [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。これらを決める前に本体実装を開始しない。
