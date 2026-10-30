@@ -13,19 +13,19 @@
 
 | 領域・コード | 現在の責務と境界 |
 |---|---|
-| [CLI](../fly-in.py)、[FlyInApp](../fly_in/orchestra.py) | 引数を解析し、Parserを呼ぶ。`MapGraph`を生成するが後続処理には渡していない。通常実行はマップ概要、`--gui`は静的Viewerを開く。移動列は生成しない |
+| [CLI](../fly-in.py)、[FlyInApp](../fly_in/orchestra.py) | 引数を解析し、Parserを呼ぶ。通常実行は`MapGraph`から計画を作り、Simulationで検証した履歴の移動行をstdoutへ出す。到達不能時はstderrへ`Error: No path from start to end.`を出し、終了コード1を返す。`--gui`は従来どおり静的Viewerを開き、計画は表示しない |
 | [Parser](../fly_in/parse/map_parser.py)、[RawMap生成](../fly_in/parse/raw_map_builder.py)、[検証アダプタ](../fly_in/parse/validation_adapter.py) | 読込・行解析・RawMap構築・Pydantic検証を分担する。`load()`の戻り値は`MapData`。入力構文の型は[map_format_def.py](../fly_in/parse/map_format_def.py)にある |
 | [MapData・Zone・Connection](../fly_in/model/map_data.py) | Pydanticで入力事実と構造上の制約を保持・検証する。Zoneは名前をキーとする辞書、Connectionはリスト。容量フィールドの存在は、ターンごとの容量計算式の承認を意味しない |
 | [MapGraph](../fly_in/model/map_graph.py) | `MapData`から隣接関係・Connection索引を構築する。Zone名は文字列、双方向Connectionの検索キーは名前の順序を正規化した組。blockedもトポロジーに残す。経路の合法性を計算する処理はまだない |
 | [DroneState](../fly_in/model/drone_state.py) | `AtZone(zone)`・`InTransit(from_zone, to_zone)`とその合併型`DroneState`。Zone名の文字列だけを持つ値オブジェクト。生成時にはどのマップでも成立しない値（Zone名規則違反、同一Zone間の`InTransit`）だけを拒否し、Zoneの存在・隣接性・遷移の合法性は検証しない。`frozen dataclass`という具体型は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案であり、承認済み契約ではない。Plan・Reservation・StateHistoryからはまだ利用されていない |
 | [移動規則](../fly_in/model/movement_rules.py)、[Reservation](../fly_in/pathfinding/reservation.py) | 移動規則は1機分の遷移合法性（隣接・blocked・normal/restrictedの所要ターン・強制到着・到着後不動）と、容量計算に使う占有Zone・使用Connectionを返す純粋関数。Reservationは確定Plan集合を正本とし、DEC-027の疎な時刻別キャッシュを持つ。`try_add`は検証と差分計算を終えてからPlanとキャッシュを一括で反映し、拒否時は何も変更しない（DEC-028）。API名・結果型（`str \| None`）・規則関数をSimulationと共有することは[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案。Planner・Schedulerからはまだ利用されていない |
 | [Simulation](../fly_in/simulation/simulation.py) | 全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`movement_lines`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。型・例外・関数配置は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
+| [静的最短経路](../fly_in/pathfinding/simple_dijkstra.py)、[逐次配送](../fly_in/pathfinding/fallback.py) | 他機体を無視した、endまでの最短ターン数を逆向きDijkstraで求める（進入コスト: restricted 2、normal/priority 1、blockedは進入不可）。startが到達不能なら`NoPathError`を送出する。最短経路では同着時にpriorityを優先する（DEC-020）。逐次配送は、Drone `k`をターン`k×L`に出発させるDEC-017のフォールバック。Dijkstraの採用とpriorityの比較規則は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
 | [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | `MapData`に基づく静的描画と検査表示。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する。探索・移動合法性は判定しない |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品は存在する。Viewerには未接続で、Snapshot生成処理もない。`Sequence[object]`を承認済みSnapshot型とは扱わない |
 | [開発用検証器](../tools/verify_subject.py) | Parserが返す入力事実を使ってCLI出力を再生検証する。本体のGraph・探索・Schedulerは呼ばない。Simulation本体でも、Subject適合性の確定した根拠でもない |
 
-現時点の接続は`CLI → FlyInApp → Parser → MapData`であり、そこからGraph生成と静的表示へ進む。
-[simple_dijkstra.py](../fly_in/pathfinding/simple_dijkstra.py)は空で、[simulation](../fly_in/simulation/__init__.py)にも実装はない。ファイル名からDijkstraの採用を推定しない。
+現時点の接続は`CLI → FlyInApp → Parser → MapData → MapGraph →` 計画 `→ Simulation → 移動行`。`--gui`は`MapData`の静的表示だけを行う。
 現在のデータ形式は実装の観測結果であり、将来も固定する契約ではない（[DEC-003](decisions.md#dec-003)）。
 
 <a id="pending"></a>
@@ -109,12 +109,12 @@ $$
 
 - restrictedへの移動中は`D<ID>-<connection>`、Zone到着時は`D<ID>-<zone>`を出力する（Subject v2.0 VII.5）。Connection文字列は**移動方向順の`<出発元>-<到着先>`**を採用する。例えば`connection: R-A`であってもA→Rなら`D1-A-R`、到着ターンは`D1-R`。これは[DEC-013](decisions.md#dec-013)のプロジェクト判断であり、内部Connectionの同一性・ID方式を固定しない。
 - blockedは進入・通過不可（Subject明文）。実装上の「実効容量0」という表現は**未確定の実装選択**であり、入力の`max_drones`を0とすることはできない。
-- startからendへ到達不能なら、パースエラーとは区別して検出・明確に報告し、シミュレーション前に終了する。具体的な承認済み報告形式はstderrへの`Error: No path from start to end.`、終了コード`1`（[DEC-013](decisions.md#dec-013)）。動作の実装は未完了。
+- startからendへ到達不能なら、パースエラーとは区別して検出・明確に報告し、シミュレーション前に終了する。具体的な承認済み報告形式はstderrへの`Error: No path from start to end.`、終了コード`1`（[DEC-013](decisions.md#dec-013)）。
 
 ### start・endの容量
 
 start_hubとend_hubには容量制限を設けない。ここに書かれた`max_drones`は、正整数ならParserで受理して容量計算では無視し、0以下などの不正値はParserエラーにする（[DEC-010](decisions.md#dec-010)）。
-現行Parserは全Zoneに正整数を要求するため検証側は既に満たすが、無視する側は容量計算が未実装のため未実装。
+現行Parserは全Zoneに正整数を要求するため検証側は既に満たすが、無視する側も、ReservationとSimulationがstart/endを容量計算から除外することで実装済み。
 検証器が到着済み機体を`delivered`集合で管理していることも、本体の到着状態契約の実装を意味しない。
 監査・整合性判断は別タスクとする。
 

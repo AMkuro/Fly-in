@@ -1,6 +1,9 @@
 from fly_in.model.map_data import MapData
 from fly_in.model.map_graph import MapGraph
 from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.pathfinding.fallback import sequential_plans
+from fly_in.pathfinding.simple_dijkstra import static_path
+from fly_in.simulation.simulation import movement_lines, simulate
 
 
 class FlyInApp:
@@ -27,11 +30,11 @@ class FlyInApp:
 
     def _orchestra(self, map_data: MapData, use_gui: bool) -> None:
         """Run the current application flow for the parsed map."""
-        MapGraph.from_map_data(map_data)
+        graph = MapGraph.from_map_data(map_data)
         if use_gui:
             self._open_gui(map_data)
             return
-        self._print_map_summary(map_data)
+        self._print_movements(graph)
 
     @staticmethod
     def _open_gui(map_data: MapData) -> None:
@@ -42,15 +45,16 @@ class FlyInApp:
         viewer.mainloop()
 
     @staticmethod
-    def _print_map_summary(map_data: MapData) -> None:
-        """Print a short non-GUI validation summary for the map."""
-        print(
-            "Map loaded: "
-            f"{map_data.nb_drones} drones, "
-            f"{len(map_data.zones)} zones, "
-            f"{len(map_data.connections)} connections."
-        )
-        print("Run with --gui to open the visual map viewer.")
+    def _print_movements(graph: MapGraph) -> None:
+        """Plan, validate, then print one movement line per turn.
+
+        Raises:
+            NoPathError: If the end hub is unreachable.
+            SimulationError: If the chosen plans break a T01 rule.
+        """
+        plans = sequential_plans(graph, static_path(graph))
+        for line in movement_lines(simulate(graph, plans)):
+            print(line)
 
     def run(self, filepath: str, use_gui: bool = False) -> None:
         """Run the application and interactive menu.
