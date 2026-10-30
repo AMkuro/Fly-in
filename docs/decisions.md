@@ -254,3 +254,15 @@
 - なお未決: `AtZone / InTransit`の具体的なフィールドと型、Planの最終状態以降をどう扱うか、Reservationが確定計画を保護する具体的方式、キャッシュの更新・検証API。
 - 承認根拠: 2026-10-30 JSTのT02設計議論。開発者が「tupleじゃなくてlist」「添え字が時間で入る値が情報」「Planは識別しなくてもいい」「Drone IDは後付けでもよい」という整理に「それで採用」と明示承認。
 - 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / Issue #2](https://github.com/AMkuro/Fly-in/issues/2)。
+
+<a id="dec-026"></a>
+
+## DEC-026 — DroneStateはZone名で場所を保持し、MapGraphで参照を解決する
+
+- 結論・状態: T02の状態表現として**文字列によるZone名を保持する案B**を採用する（`ACCEPTED`、本体未実装）。`AtZone`は`zone: str`、`InTransit`は`from_zone: str`・`to_zone: str`を持つ**概念上のフィールド構成**とし、ZoneやConnectionのオブジェクト参照そのものはDroneStateの正本に保持しない。
+- 解決方法: Zoneの属性（タイプ・座標・容量等）が必要な利用者は`MapGraph.zone(name)`を参照する。移動中のConnectionは`MapGraph.connection_between(from_zone, to_zone)`で特定する。Connectionは無向だが、`InTransit`の出発元・到着先の順序は移動方向を保持する。
+- 責務: DroneStateは「どのZoneにいるか／どのZone間をどちら向きに移動中か」を示す。MapGraphはマップ上のZone・Connectionの構造と属性を参照させる。存在しないZone名やConnectionを用いた不正状態・不正遷移は、完成した計画の検証で拒否する。具体的なインスタンス生成時の検証責任・例外方式は未決。
+- 理由: 既存`MapGraph`はZone名をキーとする参照APIを持つ。状態データを軽くし、特定のZoneインスタンスとの結び付きや直接参照に伴う可変性を避け、Planner・Simulation・GUIが同じ状態値を扱える。
+- 非決定事項: `AtZone`と`InTransit`を`dataclass`、PydanticなどのどのPython型で実装するか、具体的な不変性の実現方法、`DroneState`の型別名・配置先は未決。この決定は[DEC-025](#dec-025)の`list[DroneState]`表現と組み合わせる。
+- 承認根拠: 2026-10-30 JST、開発者が「案Bにするか」と明示して、Zone名を格納しMapGraphが参照解決する方式を採用。
+- 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)。
