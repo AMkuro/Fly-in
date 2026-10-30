@@ -195,3 +195,49 @@
 - 根拠と理由: Subject v2.0 VIおよびVII.3はpriorityを1ターンで優先されるZoneとするが、具体的な優先順は定めない。到着時刻を悪化させずに選好を反映できる規則として採用。
 - 承認根拠: 2026-10-30 JST、開発者の「同着時優先で問題ないと思う」。[T03追加判断](https://github.com/AMkuro/Fly-in/issues/3#issuecomment-6516835395)。
 - 現行契約: [T03探索方針](architecture.md#t03-pathfinding-policy)。具体的なA*評価関数と詳細のtie-break規則は未承認、T03はOpen。
+
+<a id="dec-021"></a>
+
+## DEC-021 — Droneの2状態と確定StateHistory
+
+- 結論・状態: Drone位置の概念モデルは`AtZone / InTransit`の2状態とし、**各ターンの全Drone状態を保存する履歴方式A**を採用する（`ACCEPTED`、未実装）。到着済みは既存[DEC-001](#dec-001)どおり`AtZone(end)`とし、その後不動・移動出力から除外する。
+- 時刻: `S_0`は初期状態、`S_t`はターン`t`の開始状態。同時行動によって`S_(t+1)`になる。出力の第1行は`S_0 → S_1`に対応する。概念上の`TurnState`は1時点の全Drone状態、`StateHistory`は確定した状態列`S_0, S_1, …`。
+- 理由: 確定履歴からCUIでの再現・デバッグ、GUIの任意ターン表示や巻き戻しを実現する。未確定予約と確定履歴は混同せず、確定後の過去状態を変更しない。
+- 未決: 具体的Python型・フィールド・ID・不変性の実現方法・メモリ最適化。
+- 承認根拠: 2026-10-30 JST、[T02部分承認コメント](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)。
+- 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
+
+<a id="dec-022"></a>
+
+## DEC-022 — Reservationは計画済み経路を保持し、容量予約をキャッシュする
+
+- 結論・状態: Reservationは**計画済みの1機分の時刻付き全経路を順次追加する**構造を採用し、**時刻別Zone占有・Connection利用量を経路から導出したキャッシュ（案B）**として保持する（`ACCEPTED`、未実装）。静的容量値はMapGraphから参照する。
+- 未計画機体: 全Droneは同一条件・共通start/endを持つため、未計画機体はstartで待機しているとみなし、Reservationの全時刻に明示保存しない。別の`Unplanned`物理状態・計画済み集合は必須としない。総機体数`K`と計画済み経路数`P`から未計画数`K-P`を導く（1経路が1機体に対応する条件）。
+- 容量: 追加時に[DEC-012](#dec-012)のZone容量式`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`、Connection容量式`0<=B_e(t)-F_e(t)+S_e(t)+N_e(t)<=C_e`を含む全移動規則を検証する。Connectionは双方向合算・通常1ターン通過も数え、状態間の遷移から利用量を導出する。キャッシュを独立の正本にしない。
+- 履歴との関係: `AtZone / InTransit`の**状態要素は共通**にできるが、Reservationは計画済み経路集合、StateHistoryは全Droneの確定済み時系列状態であり、保存構造まで同一にしない。全未計画機体を各時刻で明示初期化する案は採用しない。
+- 理由: 同一条件の機体に不要な予約状態を生成せず、予約付きA*の容量照会をキャッシュで支援する。
+- 未決: 容量キャッシュの具体形式・更新/無効化、時刻範囲、ID付与時点、具体型/API。
+- 承認根拠: [T02部分承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)、[未計画機体についての追加承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6518333828)（2026-10-30 JST）。
+- 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
+
+<a id="dec-023"></a>
+
+## DEC-023 — 時刻付き状態列PlanとSchedulerによる原子的予約確定
+
+- 結論・状態: **Plannerが返す1機分のPlanは、各時刻の`AtZone / InTransit`状態列を基準に表す**。Plannerは候補だけを返し、Schedulerが検証してから**原子的にReservationへ反映する案B**を採用する（`ACCEPTED`、未実装）。
+- 責務: PlannerはReservationを参照してendまでの時刻付き全経路候補を探索（[DEC-014](#dec-014)・[DEC-015](#dec-015)）。Schedulerは計画順、探索パラメータ変更、候補採否と予約確定、全体再試行・最良完成計画の保持を担当（[DEC-016](#dec-016)）。SchedulerからPlannerへの再探索・条件変更の指示を認める。Plannerは**確定Reservationを直接変更しない**。
+- 検証: 候補経路の全対象ターンについてT01の同時移動、Zone/Connection容量、restrictedの強制到着、blocked、到着後不動を確認する。状態系列と導出キャッシュの整合を保ち、失敗時に部分予約を残さない。
+- Simulation: 全機体の計画完成後（[DEC-019](#dec-019)）、Simulationが独立に合法性・全機体到着を検証し、確定StateHistoryを生成する。出力・再生は検証済み履歴に基づく。経路追加時か完成時かのDrone ID割当ては未決だが、出力・履歴中の対応は一貫させる。
+- 未決: 各型・ID・Planの時刻範囲、予約更新の具体的トランザクション、検証API、内部エラーとフォールバック切替契約。
+- 承認根拠: [T02部分承認](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)と、2026-10-30 JSTの開発者判断「各時刻の状態列を基準にする案でいいと思う」。
+- 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
+
+<a id="dec-024"></a>
+
+## DEC-024 — CUI先行・検証済み履歴に基づく表示
+
+- 結論・状態: Subject準拠の移動出力とデバッグ用CUIを先行し、既存GUIは問題なく利用できる場合に活用する（`ACCEPTED`、未実装）。GUI固有の不具合でSimulation開発を停滞させない。
+- 契約: デバッグ出力を規定の移動出力に混ぜず、CUI・GUIは検証済みStateHistoryを参照する。最終的にSubject v2.0の**GUIまたは色付き端末表示**による可視化要件を満たす。
+- 未決: 最終的な表示モードとRenderer/Snapshotの具体API。
+- 承認根拠: [T02部分承認コメント](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)。
+- 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
