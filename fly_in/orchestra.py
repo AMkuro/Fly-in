@@ -1,8 +1,7 @@
 from fly_in.model.map_data import MapData
 from fly_in.model.map_graph import MapGraph
 from fly_in.parse.map_parser import FlyInMapParser
-from fly_in.pathfinding.fallback import sequential_plans
-from fly_in.pathfinding.simple_dijkstra import static_path
+from fly_in.pathfinding.scheduler import schedule
 from fly_in.simulation.simulation import movement_lines, simulate
 
 
@@ -52,8 +51,7 @@ class FlyInApp:
             NoPathError: If the end hub is unreachable.
             SimulationError: If the chosen plans break a T01 rule.
         """
-        plans = sequential_plans(graph, static_path(graph))
-        for line in movement_lines(simulate(graph, plans)):
+        for line in movement_lines(simulate(graph, schedule(graph))):
             print(line)
 
     def run(self, filepath: str, use_gui: bool = False) -> None:
