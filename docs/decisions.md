@@ -184,3 +184,14 @@
 - 不採用／留保: 実行中に毎ターンA*を再実行する方式や、部分経路・時間窓を継ぎ足す方式は初期基準に含めない。実測・仕様変更によって必要なら再設計可能。事前完成はA*の内部探索状態を保存する要求ではない。
 - 根拠: 2026-10-30 JST、T03の「実行開始前に全計画を完成させる」方針について開発者が「確定しようか」と回答し、方針採用を求めた。[T03承認記録](https://github.com/AMkuro/Fly-in/issues/3#issuecomment-6516626405)。
 - 現行契約: [T03探索方針](architecture.md#t03-pathfinding-policy)。T02の具体的共有型は未承認であり、T03はOpenのまま。
+
+<a id="dec-020"></a>
+
+## DEC-020 — priority Zoneは同着時に優先する
+
+- 結論・状態: **endへの到着時刻が同じ合法な経路候補同士では、priority Zoneを通る経路を優先する**（`ACCEPTED`、未実装）。priorityはnormalと同じ1ターン移動であり、経路の移動時間そのものを減らす効果は与えない。
+- 適用範囲: priority経由という理由だけで、**より遅くendに到着する経路を選ぶことはしない**。Zone/Connection容量・restricted強制到着等のT01の合法性を変更しない。Schedulerによる完成計画の比較ではMakespanが第一基準であり、priorityを選好するためにMakespan悪化を無条件に受け入れない。
+- T03との関係: [DEC-016](#dec-016)で採用した、SchedulerがPlannerの同着候補選択順をパラメータで調整する方針は維持する。priorityを含む候補間の比較方法（経由の有無／経由するpriority Zoneの個数、同一Zoneの再訪、分散評価との優先順位）は未決。個別最短到着からの許容遅延を別目的で認めるかも未決であり、今回の同着時優先のみからは固定しない。
+- 根拠と理由: Subject v2.0 VIおよびVII.3はpriorityを1ターンで優先されるZoneとするが、具体的な優先順は定めない。到着時刻を悪化させずに選好を反映できる規則として採用。
+- 承認根拠: 2026-10-30 JST、開発者の「同着時優先で問題ないと思う」。[T03追加判断](https://github.com/AMkuro/Fly-in/issues/3#issuecomment-6516835395)。
+- 現行契約: [T03探索方針](architecture.md#t03-pathfinding-policy)。具体的なA*評価関数と詳細のtie-break規則は未承認、T03はOpen。
