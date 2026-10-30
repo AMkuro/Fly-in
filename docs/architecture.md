@@ -136,7 +136,11 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 - **IDの割当て**：全機体のPlanが確定した後、**確定計画のリスト順に1始まりのDrone ID**を割り当てる（`plans[0]`がDrone 1）。Simulation・StateHistory・CLI・GUIはこの対応を共有し、移動途中で機体IDを交換しない。確定Reservationの中の`list`は後から変更せず、キャッシュ整合性を守る。変更防止・コピーの具体実装は未決（[DEC-025](decisions.md#dec-025)）。
 - **Reservationは計画済みDroneの時刻付き全経路を順次追加**する構造を採用する。未計画Droneはstartで待機するとみなすが、未計画機体の各時刻の`AtZone(start)`をReservationに保存しない。全機体数`K`と予約済み経路数`P`から未計画数`K-P`を得られる（1経路が1機体を表すことを前提とする）。`Unplanned`という物理状態・計画済み集合を追加する必要はない。
 - ReservationとStateHistoryは**状態要素を共通化**するが、**格納構造まで同一とはしない**。前者は全機体計画が未完成でも使う個別経路集合、後者は検証済み全機体の時系列状態。
-- Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする。定義容量は静的MapGraphのものを参照する。1ターンで通過するConnectionの利用数も必要なため、同時刻の位置だけでなく連続する状態間の移動を参照して導出する。
+- Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする（[DEC-027](decisions.md#dec-027)）。定義容量は静的MapGraphのものを参照する。**時刻を第1キーとする疎な辞書**を使い、使用数0のキーは省略・照会時0として扱う。具体的な概念構造は`zone_occupancy[t][zone_name]`と`connection_usage[t][connection_key]`。ゾーン名は文字列、Connectionキーは`MapGraph.connection_key(a, b)`による無向正規化キーとする。
+- **時刻の意味は異なる**：`zone_occupancy[t][z]`は状態`S_t`でZone `z`にいる機体数、`connection_usage[t][e]`は`S_t → S_(t+1)`の移動ターン`t`における容量判定用使用量。start/endのZone占有は無制限のためキャッシュから省ける。
+- **候補PlanのZone差分**：各`plan[t]`が`AtZone(z)`なら、start/endを除いて`delta_zone[t][z] += 1`。`InTransit`ならZone使用差分はない。
+- **候補PlanのConnection差分**：連続する`plan[t] → plan[t+1]`を調べ、通常1ターン移動`AtZone(a) → AtZone(b)`、restrictedへの進入`AtZone(a) → InTransit(a,b)`の場合、それぞれ`delta_connection[t][connection_key(a,b)] += 1`。待機と合法なrestrictedの強制到着`InTransit(a,b) → AtZone(b)`は新たな利用として加算しない。合法な強制到着についてはT01式の`B_e(t)=F_e(t)`によって退出分が同一ターンに解放される。**この簡約を採用する場合も、restrictedの翌ターン強制到着を別途検証する**。
+- **差分検証→一括確定**：Schedulerは候補の状態遷移を検証し、既存Reservationを変更せず差分を生成する。全関連時刻で`zone_occupancy + delta_zone`および`connection_usage + delta_connection`がMapGraphの容量を超えないことを確認する。合法なら**候補Planと容量キャッシュを原子的に反映**し、違反なら差分を破棄して既存Reservationを変更しない。Planがendに到着して以降はendに留まるため、終了後のZone容量予約を追加生成しない。キャッシュは**確定済みPlanだけから再構築でき、再構築した値と常に一致**しなければならない。
 - 予約候補に対しては[T01の容量・合法性契約](#t01-movement-contract)をそのまま適用する。Zoneでは`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`かつ`0<=O_z(t+1)<=C_z`、無向Connectionでは双方向合算の`0<=B_e(t)-F_e(t)+S_e(t)+N_e(t)<=C_e`を検証する。restrictedの進入翌ターンの強制到着、blocked禁止、到着後不動、start/endの容量例外も必須。
 
 #### 責務分担・確定境界
@@ -155,7 +159,7 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 #### T02の未決事項
 
 - `AtZone / InTransit`の**場所フィールド（Zone名`str`）は決定済み**。その具体的なPython型（dataclass等）、`DroneState`の型別名、`TurnState / Reservation / StateHistory / Move / Snapshot`のフィールド・所有者・読取APIは未決。Planは`list[DroneState]`相当（[DEC-025](decisions.md#dec-025)）。
-- Planのend到着後の状態の扱い、予約キャッシュの更新/無効化と原子性の実装方法、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
+- Planのend到着後の状態は`AtZone(end)`として暗黙に継続し、容量キャッシュを無限延長しない方針とする。未決なのは予約キャッシュの**原子的更新と例外時の実装保証**、公開・再構築API、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
 - 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
 
 <a id="t03-pathfinding-policy"></a>
@@ -180,7 +184,7 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 次は未承認で、現在の[部分承認済みT02契約](#t02-state-sharing-contract)および[T03方針](#t03-pathfinding-policy)を取り消すものではない。
 
 - State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、所有者・読取API。Planのリスト表現は[DEC-025](decisions.md#dec-025)、`AtZone / InTransit`のZone名フィールドは[DEC-026](decisions.md#dec-026)で承認済み。
-- 予約キャッシュの更新/無効化、Planの時刻範囲、原子的な経路追加・Simulation検証失敗の具体的な実装契約。
+- 予約キャッシュの**具体的な更新・例外時の原子性保証・公開API**、Plan/Stateの確定後の変更防止、Simulation検証失敗の実装契約。キャッシュ構造と差分生成・検証の方針は[DEC-027](decisions.md#dec-027)で承認済み。
 - 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
 - RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
 
