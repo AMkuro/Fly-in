@@ -115,6 +115,46 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 検証器が到着済み機体を`delivered`集合で管理していることも、本体の到着状態契約の実装を意味しない。
 監査・整合性判断は別タスクとする。
 
+
+<a id="t02-state-sharing-contract"></a>
+
+### T02 — 状態・共有契約（部分承認・未実装）
+
+以下は[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)で**採用された設計方針**であり、具体的なPython型・メソッド・格納方式まで確定したものではない。[DEC-021](decisions.md#dec-021)〜[DEC-024](decisions.md#dec-024)に採用理由と根拠を記載する。T03で確定した探索戦略は[下記T03節](#t03-pathfinding-policy)を参照する。
+
+#### 状態と時刻
+
+- Droneの物理状態は概念上`AtZone / InTransit`の2種類。到着済みは`AtZone(end)`で保持し、以後の移動は許可せず移動トークンにも含めない（[DEC-001](decisions.md#dec-001)）。
+- `S_0`は初期状態、`S_t`はターン`t`の開始状態。ターン`t`の同時行動で`S_(t+1)`になる。外部移動出力の第1行は`S_0 → S_1`に対応する。
+- `TurnState`は概念上1時点の全Drone状態。`StateHistory`は`S_0, S_1, …`の確定済み状態列。**各ターンの全Drone状態を保存する履歴方式A**を採用する。確定済みの過去状態は変更せず、CUIの調査やGUIの巻き戻し・再生に利用する。
+
+#### PlanとReservation
+
+- **1機分のPlanは、各時刻の`AtZone / InTransit`状態列を基準表現とする**。Plannerは既存のReservationを参照して、実際のendまでの時刻付き全経路候補を返す（[DEC-015](decisions.md#dec-015)）。
+- **Reservationは計画済みDroneの時刻付き全経路を順次追加**する構造を採用する。未計画Droneはstartで待機するとみなすが、未計画機体の各時刻の`AtZone(start)`をReservationに保存しない。全機体数`K`と予約済み経路数`P`から未計画数`K-P`を得られる（1経路が1機体を表すことを前提とする）。`Unplanned`という物理状態・計画済み集合を追加する必要はない。
+- ReservationとStateHistoryは**状態要素を共通化**するが、**格納構造まで同一とはしない**。前者は全機体計画が未完成でも使う個別経路集合、後者は検証済み全機体の時系列状態。
+- Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする。定義容量は静的MapGraphのものを参照する。1ターンで通過するConnectionの利用数も必要なため、同時刻の位置だけでなく連続する状態間の移動を参照して導出する。
+- 予約候補に対しては[T01の容量・合法性契約](#t01-movement-contract)をそのまま適用する。Zoneでは`O_z(t+1)=O_z(t)-D_z(t)+A_z(t)`かつ`0<=O_z(t+1)<=C_z`、無向Connectionでは双方向合算の`0<=B_e(t)-F_e(t)+S_e(t)+N_e(t)<=C_e`を検証する。restrictedの進入翌ターンの強制到着、blocked禁止、到着後不動、start/endの容量例外も必須。
+
+#### 責務分担・確定境界
+
+| 領域 | 承認済みの役割 |
+|---|---|
+| Planner | 時刻付き予約A*で1機分のPlan候補を探索する。Schedulerの探索条件変更・再探索要求を受ける。**確定Reservationは直接書き換えない** |
+| Scheduler | 計画順序、候補採否、探索条件の指定、予約確定、全体再試行、最良完成計画の保持を担う。候補の全関連ターンをT01のルールで検証し、**経路正本・容量キャッシュを原子的に反映**する。不正候補の部分反映は禁止 |
+| Simulation | 全Droneの完成計画を**独立して**合法性・全機体end到着まで検証し、確定StateHistoryを生成する |
+| CLI / CUI / GUI | 検証済みStateHistoryから規定の移動出力・デバッグ表示・再生を行う。CUIを優先し、既存GUIが問題なければ活用する |
+
+T03の[全体再計画方式C](decisions.md#dec-016)に従い、改善試行ごとにReservationを初期化する。失敗した試行は保持済みの最良完成計画を上書きしない。計画全体を外部出力開始前に完成・独立検証し、**出力・再生中にPlannerを再実行しない**（[DEC-019](decisions.md#dec-019)）。
+
+Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採用しないなら、Subject v2.0の**色付き端末表示**の要件を満たす必要がある。
+
+#### T02の未決事項
+
+- `AtZone / InTransit / TurnState / Plan / Reservation / StateHistory / Move / Snapshot`の具体的なPython型、フィールド、内部ID、所有者と読取API。
+- Planの時刻範囲・終端状態の扱い、予約キャッシュの更新/無効化と原子性の実装方法、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
+- 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
+
 <a id="t03-pathfinding-policy"></a>
 
 ### T03 — 探索基準方式（方針承認・詳細未確定）
@@ -134,12 +174,11 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 
 ## Proposed
 
-次は未承認で、現在有効な型・処理境界として採用しない。
+次は未承認で、現在の[部分承認済みT02契約](#t02-state-sharing-contract)および[T03方針](#t03-pathfinding-policy)を取り消すものではない。
 
-- State・Move・Plan・Reservation・Snapshotの正本と保存方法。
-- `InTransit`、`PlannedMove`、ターン状態遷移の具体的な型・入出力・エラー表現。
-- Planner / Schedulerの分割、予約処理、GUIへのSnapshot受渡し。
-- 採用済みの時間付き予約A*を具体化する探索・競合解決・再計画・停止方針、および他方式を追加するかどうか。
-- 内部IDの文字列・整数の選択、探索失敗・再計画・終了条件。
+- State・Move・Plan・Reservation・StateHistory・Snapshotの具体的なPython型、`InTransit`のフィールド、内部ID、所有者・読取API。
+- 予約キャッシュの更新/無効化、Planの時刻範囲、原子的な経路追加・Simulation検証失敗の具体的な実装契約。
+- 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
+- RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
 
-未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項の一覧は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。引き継ぎ記録のサンプル型をそのまま実装契約にしない。
+未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。
