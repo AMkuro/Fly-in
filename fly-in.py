@@ -8,14 +8,11 @@ from fly_in.pathfinding.simple_dijkstra import NoPathError
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse CLI arguments for the Fly-in runner."""
     parser = argparse.ArgumentParser(
-        prog="fly-in.py",
-        description="Run Fly-in drone routing.",
+        prog="Fly-in", description="Run Fly-in drone routing."
     )
     parser.add_argument("map_path", help="Path to the map file.")
     parser.add_argument(
-        "--gui",
-        action="store_true",
-        help="Open the visual map viewer.",
+        "--gui", action="store_true", help="Open the visual map viewer."
     )
     return parser.parse_args(argv)
 

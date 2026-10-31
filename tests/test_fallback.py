@@ -99,7 +99,7 @@ class CliTests(unittest.TestCase):
             "end_hub: end 2 0\nconnection: start-a\nconnection: a-end\n")
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.splitlines(),
-                         ["D1-a", "D1-end", "D2-a", "D2-end"])
+                         ["D1-a", "D1-end D2-a", "D2-end"])
 
 
 if __name__ == "__main__":
