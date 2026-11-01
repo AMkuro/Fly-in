@@ -74,3 +74,10 @@ class Zone(MetadataModel):
         if any(char.isdigit() for char in value):
             raise ValueError("color must not contain digits.")
         return value
+
+    @property
+    def entry_turns(self) -> int | None:
+        """Return turns needed to enter this zone; ``None`` if blocked."""
+        if self.zone_type is ZoneType.BLOCKED:
+            return None
+        return 2 if self.zone_type is ZoneType.RESTRICTED else 1

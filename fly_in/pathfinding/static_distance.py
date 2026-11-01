@@ -11,7 +11,6 @@ import heapq
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from fly_in.model.map_graph import MapGraph
 from fly_in.model.scenario import Scenario
 from fly_in.model.zone_model import ZoneType
 
@@ -22,14 +21,6 @@ class NoPathError(ValueError):
     def __init__(self) -> None:
         """Use the user-facing message required for an unreachable end."""
         super().__init__("No path from start to end.")
-
-
-def entry_turns(graph: MapGraph, zone: str) -> int | None:
-    """Return turns needed to enter ``zone``; ``None`` if it is blocked."""
-    zone_type = graph.zone(zone).zone_type
-    if zone_type is ZoneType.BLOCKED:
-        return None
-    return 2 if zone_type is ZoneType.RESTRICTED else 1
 
 
 class StaticDistance:
@@ -51,8 +42,8 @@ class StaticDistance:
 
         Dijkstra runs backward from the end. Moving ``u -> v`` costs the
         entry turns of ``v``, so relaxing from ``v`` adds
-        ``entry_turns(v)``. A zone's value therefore excludes the cost of
-        entering that zone itself.
+        ``Zone.entry_turns`` of ``v``. A zone's value therefore excludes the
+        cost of entering that zone itself.
 
         Zones with no route to the end are absent. A blocked zone next to a
         reachable zone is present but never expanded, so no route passes
@@ -67,7 +58,7 @@ class StaticDistance:
             turns, zone = heapq.heappop(queue)
             if turns > distance[zone]:
                 continue
-            cost = entry_turns(graph, zone)
+            cost = graph.zone(zone).entry_turns
             if cost is None:
                 continue
             for neighbor in graph.neighbors_for(zone):
@@ -97,7 +88,7 @@ class StaticDistance:
                 neighbor
                 for neighbor in graph.neighbors_for(zone)
                 if neighbor in distance
-                and entry_turns(graph, neighbor)
+                and graph.zone(neighbor).entry_turns
                 == distance[zone] - distance[neighbor]
             ]
             zone = max(

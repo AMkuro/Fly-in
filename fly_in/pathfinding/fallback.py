@@ -13,14 +13,13 @@ from collections.abc import Sequence
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.map_graph import MapGraph
 from fly_in.model.scenario import Scenario
-from fly_in.pathfinding.static_distance import entry_turns
 
 
 def path_states(graph: MapGraph, path: Sequence[str]) -> list[DroneState]:
     """Expand a zone path into ``S_0 ..`` states without waiting."""
     states: list[DroneState] = [AtZone(path[0])]
     for before, after in zip(path, path[1:]):
-        if entry_turns(graph, after) == 2:
+        if graph.zone(after).entry_turns == 2:
             states.append(InTransit(before, after))
         states.append(AtZone(after))
     return states
