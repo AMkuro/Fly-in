@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field, field_validator, model_validator
 
 from fly_in.model.metadata_model import MetadataModel, MetadataSpec
-from fly_in.model.zone_model import _validate_zone_name
+from fly_in.model.zone_model import Zone
 
 
 class Connection(MetadataModel):
@@ -44,7 +44,7 @@ class Connection(MetadataModel):
     @classmethod
     def validate_endpoint(cls, value: str) -> str:
         """Validate a connection endpoint name."""
-        return _validate_zone_name(value, "connection endpoint")
+        return Zone.check_name(value, "connection endpoint")
 
     @model_validator(mode="after")
     def reject_self_loop(self) -> Connection:

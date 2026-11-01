@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias, Union
 
-from fly_in.model.zone_model import _validate_zone_name
+from fly_in.model.zone_model import Zone
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class AtZone:
 
     def __post_init__(self) -> None:
         """Reject names that cannot be a zone on any map."""
-        _validate_zone_name(self.zone, "zone")
+        Zone.check_name(self.zone, "zone")
 
 
 @dataclass(frozen=True)
@@ -42,8 +42,8 @@ class InTransit:
         Whether the zones exist, are adjacent, and whether ``to_zone`` is
         restricted depends on the map and is checked by plan validation.
         """
-        _validate_zone_name(self.from_zone, "from_zone")
-        _validate_zone_name(self.to_zone, "to_zone")
+        Zone.check_name(self.from_zone, "from_zone")
+        Zone.check_name(self.to_zone, "to_zone")
         if self.from_zone == self.to_zone:
             raise ValueError("InTransit endpoints must be different zones.")
 
