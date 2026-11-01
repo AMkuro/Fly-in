@@ -17,7 +17,7 @@ import random
 from dataclasses import dataclass
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
-from fly_in.model.map_data import ZoneType
+from fly_in.model.zone_model import ZoneType
 from fly_in.model.map_graph import MapGraph
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.simple_dijkstra import entry_turns
@@ -47,12 +47,12 @@ def plan_drone(
 ) -> list[DroneState] | None:
     """Return the earliest legal plan arriving by ``deadline``, or ``None``.
 
-    ``distance`` is ``turns_to_end`` of the same graph. The reservation is
+    ``distance`` is ``turns_to_end`` of the same scenario. The reservation is
     only read; committing the plan is the caller's job (DEC-028).
     """
-    graph = reservation.graph
-    goal = AtZone(graph.end_hub.name)
-    start: Node = (AtZone(graph.start_hub.name), 0)
+    scenario = reservation.scenario
+    goal = AtZone(scenario.end_name)
+    start: Node = (AtZone(scenario.start_name), 0)
     rng = random.Random(params.seed)
     order = itertools.count()
     queue: list[QueueItem] = [(
@@ -137,8 +137,8 @@ def _successors(
 
 def _zone_has_room(reservation: Reservation, zone: str, turn: int) -> bool:
     """Return whether one more drone fits in ``zone`` at ``S_turn``."""
-    graph = reservation.graph
-    if zone in (graph.start_hub.name, graph.end_hub.name):
+    scenario = reservation.scenario
+    if zone in (scenario.start_name, scenario.end_name):
         return True
     used = reservation.zone_occupancy(turn, zone)
     return used < reservation.zone_capacity(zone)

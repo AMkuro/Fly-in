@@ -3,11 +3,11 @@
 import unittest
 from pathlib import Path
 
-from map_builder import graph_from_text
+from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
-from fly_in.model.map_graph import MapGraph
-from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.parse import FlyInMapParser
+from fly_in.parse.scenario_builder import build_scenario
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
@@ -40,8 +40,8 @@ connection: a-end
 
 
 def planner_inputs(text: str) -> tuple[Reservation, dict[str, int]]:
-    graph = graph_from_text(text)
-    return Reservation(graph), turns_to_end(graph)
+    scenario = scenario_from_text(text)
+    return Reservation(scenario), turns_to_end(scenario)
 
 
 class PlannerTests(unittest.TestCase):
@@ -89,40 +89,43 @@ class PlannerTests(unittest.TestCase):
 
 class SchedulerTests(unittest.TestCase):
     def test_unreachable_end_raises(self) -> None:
-        graph = graph_from_text(
+        scenario = scenario_from_text(
             "nb_drones: 1\nstart_hub: start 0 0\n"
             "hub: wall 1 0 [zone=blocked]\nend_hub: end 2 0\n"
             "connection: start-wall\nconnection: wall-end\n")
         with self.assertRaises(NoPathError):
-            schedule(graph)
+            schedule(scenario)
 
     def test_zero_attempts_keeps_sequential_fallback(self) -> None:
-        graph = graph_from_text(LINEAR)
-        self.assertEqual(makespan(schedule(graph, attempts=0)), 4)
-        self.assertEqual(makespan(schedule(graph)), 3)
+        scenario = scenario_from_text(LINEAR)
+        self.assertEqual(makespan(schedule(scenario, attempts=0)), 4)
+        self.assertEqual(makespan(schedule(scenario)), 3)
 
     def test_shipped_maps_reach_subject_optimum(self) -> None:
         for name, optimum in OPTIMUM.items():
             with self.subTest(map=name):
-                graph = MapGraph.from_map_data(
-                    FlyInMapParser().load(ROOT / "maps" / name))
-                history = simulate(graph, schedule(graph))
+                parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
+                scenario = build_scenario(parsed)
+                plans = schedule(scenario)
+                history = simulate(scenario, plans)
                 self.assertEqual(history.makespan, optimum)
 
     def test_reservation_accepts_every_planner_result(self) -> None:
         # A rejection would silently drop attempts; make it visible here.
         for name in OPTIMUM:
             with self.subTest(map=name):
-                graph = MapGraph.from_map_data(
-                    FlyInMapParser().load(ROOT / "maps" / name))
-                plans = plan_all(graph, turns_to_end(graph), 10_000,
-                                 SearchParams())
+                parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
+                scenario = build_scenario(parsed)
+                plans = plan_all(
+                    scenario, turns_to_end(scenario), 10_000,
+                    SearchParams(),
+                )
                 self.assertIsNotNone(plans)
 
     def test_scheduled_plans_are_one_per_drone(self) -> None:
-        graph = graph_from_text(LINEAR)
-        plans: list[list[DroneState]] = schedule(graph)
-        self.assertEqual(len(plans), graph.nb_drones)
+        scenario = scenario_from_text(LINEAR)
+        plans: list[list[DroneState]] = schedule(scenario)
+        self.assertEqual(len(plans), 2)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeAlias, Union
 
-from fly_in.model.map_data import _validate_zone_name
+from fly_in.model.zone_model import _validate_zone_name
 
 
 @dataclass(frozen=True)

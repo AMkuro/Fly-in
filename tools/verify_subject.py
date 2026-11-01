@@ -14,20 +14,23 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from fly_in.model.map_data import MapData, ZoneType
-from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.model.scenario import Scenario
+from fly_in.model.zone_model import ZoneType
+from fly_in.parse import FlyInMapParser
+from fly_in.parse.scenario_builder import build_scenario
 
 
 class MovementVerifier:
     """Replay occupancy, connection use and mandatory two-turn arrivals."""
 
-    def __init__(self, data: MapData) -> None:
-        """Index input facts without using the graph or solver."""
-        self.data = data
+    def __init__(self, scenario: Scenario) -> None:
+        """Index graph input facts without using routing or simulation code."""
+        self.scenario = scenario
+        self.data = scenario.graph
         self.edges = {
-            frozenset((edge.a, edge.b)): edge for edge in data.connections
+            frozenset((edge.a, edge.b)): edge for edge in self.data.connections
         }
-        self.named_edges = {edge.name: edge for edge in data.connections}
+        self.named_edges = {edge.name: edge for edge in self.data.connections}
 
     def verify(self, output: str, max_turns: int) -> int:
         """Reject malformed, incomplete, late or capacity-violating output."""
@@ -35,13 +38,13 @@ class MovementVerifier:
         if not lines or len(lines) > max_turns:
             raise ValueError("missing movements or turn limit exceeded")
         positions = {
-            drone: self.data.start_hub_name
-            for drone in range(1, self.data.nb_drones + 1)
+            drone: self.scenario.start_name
+            for drone in range(1, self.scenario.nb_drones + 1)
         }
         transit: dict[int, tuple[str, str]] = {}
         delivered: set[int] = set()
         for turn, line in enumerate(lines, 1):
-            if len(delivered) == self.data.nb_drones:
+            if len(delivered) == self.scenario.nb_drones:
                 raise ValueError("output continues after all drones arrived")
             moves: dict[int, str] = {}
             for token in line.split():
@@ -49,7 +52,7 @@ class MovementVerifier:
                 if match is None:
                     raise ValueError(f"turn {turn}: invalid token {token!r}")
                 drone, target = int(match[1]), match[2]
-                if not 1 <= drone <= self.data.nb_drones:
+                if not 1 <= drone <= self.scenario.nb_drones:
                     raise ValueError(f"turn {turn}: unknown drone {drone}")
                 if drone in moves or drone in delivered:
                     raise ValueError(f"turn {turn}: duplicate/delivered drone")
@@ -92,18 +95,18 @@ class MovementVerifier:
                     )
                 if drone in transit:
                     positions.pop(drone)
-                elif destination == self.data.end_hub_name:
+                elif destination == self.scenario.end_name:
                     positions.pop(drone, None)
                     delivered.add(drone)
                 else:
                     positions[drone] = destination
             for zone_name, count in Counter(positions.values()).items():
-                if zone_name != self.data.start_hub_name:
+                if zone_name != self.scenario.start_name:
                     if count > self.data.zones[zone_name].max_drones:
                         raise ValueError(
                             f"turn {turn}: zone capacity exceeded"
                         )
-        if len(delivered) != self.data.nb_drones or transit:
+        if len(delivered) != self.scenario.nb_drones or transit:
             raise ValueError("not all drones were delivered")
         return len(lines)
 
@@ -196,7 +199,8 @@ class SubjectVerifier:
             )
         )
         for path, limit in cases:
-            data = FlyInMapParser().load(path)
+            parsed = FlyInMapParser().load(str(path))
+            scenario = build_scenario(parsed)
             result = subprocess.run(
                 [sys.executable, str(self.root / "fly-in.py"), str(path)],
                 cwd=self.root, capture_output=True, text=True, timeout=20,
@@ -206,7 +210,9 @@ class SubjectVerifier:
                     f"{path.name}: CLI failed: {result.stderr.strip()}"
                 )
             try:
-                turns = MovementVerifier(data).verify(result.stdout, limit)
+                turns = MovementVerifier(scenario).verify(
+                    result.stdout, limit
+                )
             except ValueError as error:
                 raise ValueError(f"{path.name}: {error}") from error
             print(f"PASS {path.name}: {turns} turns")

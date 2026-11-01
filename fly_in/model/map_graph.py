@@ -2,25 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from fly_in.model.map_data import Connection, MapData, Zone
+from fly_in.model.connection_model import Connection, connection_key
+from fly_in.model.zone_model import Zone
 
 
 @dataclass(frozen=True)
 class MapGraph:
-    """Adjacency-oriented view of a validated map.
+    """Static zone and connection indexes, independent of execution roles.
 
-    ``MapData`` keeps the parser-facing facts. ``MapGraph`` indexes those facts
-    for graph operations such as pathfinding and future simulation.
-    Blocked zones remain in the topology; routing must exclude them from paths.
+    Build from models after whole-map validation. Blocked zones remain in the
+    topology; routing must exclude them from paths.
     """
 
-    nb_drones: int
-    start_hub: Zone
-    end_hub: Zone
     zones: Mapping[str, Zone]
     connections: tuple[Connection, ...]
     connections_by_name: Mapping[str, Connection]
@@ -29,9 +26,11 @@ class MapGraph:
     neighbors_by_zone: Mapping[str, tuple[str, ...]]
 
     @classmethod
-    def from_map_data(cls, map_data: MapData) -> "MapGraph":
-        """Build adjacency indexes from already-validated ``MapData``."""
-        zones = dict(map_data.zones)
+    def from_models(
+        cls, zones: Mapping[str, Zone], connections: Sequence[Connection]
+    ) -> MapGraph:
+        """Build topology indexes from already validated map models."""
+        zones = dict(zones)
         connections_by_name: dict[str, Connection] = {}
         connections_by_key: dict[tuple[str, str], Connection] = {}
         connections_by_zone: dict[str, list[Connection]] = {
@@ -41,7 +40,7 @@ class MapGraph:
             zone_name: [] for zone_name in zones
         }
 
-        for connection in map_data.connections:
+        for connection in connections:
             connections_by_name[connection.name] = connection
             key = cls.connection_key(connection.a, connection.b)
             connections_by_key[key] = connection
@@ -51,11 +50,8 @@ class MapGraph:
             neighbors_by_zone[connection.b].append(connection.a)
 
         return cls(
-            nb_drones=map_data.nb_drones,
-            start_hub=zones[map_data.start_hub_name],
-            end_hub=zones[map_data.end_hub_name],
             zones=MappingProxyType(zones),
-            connections=tuple(map_data.connections),
+            connections=tuple(connections),
             connections_by_name=MappingProxyType(connections_by_name),
             connections_by_key=MappingProxyType(connections_by_key),
             connections_by_zone=MappingProxyType(
@@ -75,7 +71,7 @@ class MapGraph:
     @staticmethod
     def connection_key(a: str, b: str) -> tuple[str, str]:
         """Return the canonical undirected key for two zone names."""
-        return (a, b) if a <= b else (b, a)
+        return connection_key(a, b)
 
     def zone(self, zone_name: str) -> Zone:
         """Return a zone by name."""

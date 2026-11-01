@@ -12,6 +12,59 @@
 
 <!-- any relevant information about compilation, installation, and/or execution. -->
 
+### Configuration File Encoding
+
+Configuration files must be saved as UTF-8.
+
+If a file cannot be decoded as UTF-8, the program reports a file-level error
+with the file path and cause, without a line number.
+
+This encoding requirement is an implementation-specific constraint, not an
+explicit requirement of the Fly-in subject.
+
+### Configuration File Whitespace
+
+The parser accepts leading and trailing spaces or tabs, whitespace around the
+declaration colon (`:`), and multiple spaces or tabs between zone fields and
+metadata entries. Blank lines and comments starting with `#` are ignored.
+For example, this map is accepted:
+
+```text
+    nb_drones   :    2
+
+ start_hub: start    0   0
+    end_hub : end   1    0
+connection : start-end    # inline comments are also accepted
+```
+
+Zone names must remain single tokens. Keep connections as `start-end` and
+metadata entries as `key=value`, without spaces around `-` or `=`.
+
+### Coordinate Uniqueness
+
+The parser rejects maps in which two or more distinct zones share the same
+`(x, y)` coordinates, including start and end hubs.
+
+We chose this restriction because Fly-in represents drone movement in a
+two-dimensional space. Under our interpretation, each coordinate pair
+represents a single physical location, so distinct zones at exactly the same
+location would be inconsistent with this spatial model.
+
+This is an additional design decision made by our implementation, not an
+explicit requirement of the Fly-in subject. It may therefore reject maps that
+are otherwise allowed by the subject.
+
+### Color Restriction
+
+The parser rejects a `color` value that is empty, contains whitespace, or
+contains a digit (for example `color=0` or `color=red1`).
+
+The subject only requires single-word color strings with no fixed list. We
+additionally reject digits because our display layer cannot handle colors
+that contain them. This is an additional design decision made by our
+implementation, not an explicit requirement of the Fly-in subject. It may
+therefore reject maps that are otherwise allowed by the subject.
+
 ## Algorithm and Implementation Strategy
 
 <!-- a detailed description of your algorithm choices and implementation strategy -->

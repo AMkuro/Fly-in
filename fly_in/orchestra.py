@@ -1,6 +1,6 @@
-from fly_in.model.map_data import MapData
-from fly_in.model.map_graph import MapGraph
-from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.model.scenario import Scenario
+from fly_in.parse import FlyInMapParser
+from fly_in.parse.scenario_builder import build_scenario
 from fly_in.pathfinding.scheduler import schedule
 from fly_in.simulation.simulation import movement_lines, simulate
 
@@ -8,9 +8,9 @@ from fly_in.simulation.simulation import movement_lines, simulate
 class FlyInApp:
     def __init__(self) -> None:
         """Initialize empty application state."""
-        self._map_data: MapData | None = None
+        self._scenario: Scenario | None = None
 
-    def _load_map(self, filepath: str) -> MapData:
+    def _load_map(self, filepath: str) -> Scenario:
         """Load and store map parsed data.
 
         Args:
@@ -24,34 +24,36 @@ class FlyInApp:
             OSError: If the configuration file cannot be read.
             ValueError: If configuration parsing or validation fails.
         """
-        self._map_data = FlyInMapParser().load(filepath)
-        return self._map_data
+        self._scenario = build_scenario(FlyInMapParser().load(filepath))
+        return self._scenario
 
-    def _orchestra(self, map_data: MapData, use_gui: bool) -> None:
+    def _orchestra(
+        self, scenario: Scenario, use_gui: bool
+    ) -> None:
         """Run the current application flow for the parsed map."""
-        graph = MapGraph.from_map_data(map_data)
         if use_gui:
-            self._open_gui(map_data)
+            self._open_gui(scenario)
             return
-        self._print_movements(graph)
+        self._print_movements(scenario)
 
     @staticmethod
-    def _open_gui(map_data: MapData) -> None:
+    def _open_gui(scenario: Scenario) -> None:
         """Open the static map viewer only when explicitly requested."""
         from fly_in.rendering.viewer_app import ViewerApp
 
-        viewer = ViewerApp(map_data)
+        viewer = ViewerApp(scenario)
         viewer.mainloop()
 
     @staticmethod
-    def _print_movements(graph: MapGraph) -> None:
+    def _print_movements(scenario: Scenario) -> None:
         """Plan, validate, then print one movement line per turn.
 
         Raises:
             NoPathError: If the end hub is unreachable.
             SimulationError: If the chosen plans break a T01 rule.
         """
-        for line in movement_lines(simulate(graph, schedule(graph))):
+        plans = schedule(scenario)
+        for line in movement_lines(simulate(scenario, plans)):
             print(line)
 
     def run(self, filepath: str, use_gui: bool = False) -> None:
@@ -68,5 +70,5 @@ class FlyInApp:
                 fails.
             RuntimeError: If menu actions encounter invalid application state.
         """
-        map_data: MapData = self._load_map(filepath)
-        self._orchestra(map_data, use_gui)
+        scenario = self._load_map(filepath)
+        self._orchestra(scenario, use_gui)

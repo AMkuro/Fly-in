@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from fly_in.model.drone_state import DroneState, InTransit
-from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 from fly_in.model.movement_rules import (
     connection_used,
     occupied_zone,
@@ -54,7 +54,7 @@ class StateHistory:
 
 
 def simulate(
-    graph: MapGraph, plans: Sequence[Sequence[DroneState]]
+    scenario: Scenario, plans: Sequence[Sequence[DroneState]]
 ) -> StateHistory:
     """Validate one plan per drone and return the confirmed history.
 
@@ -64,12 +64,12 @@ def simulate(
     Raises:
         SimulationError: If any T01 rule or the final delivery fails.
     """
-    if len(plans) != graph.nb_drones:
+    if len(plans) != scenario.nb_drones:
         raise SimulationError(
-            f"expected {graph.nb_drones} plans, got {len(plans)}"
+            f"expected {scenario.nb_drones} plans, got {len(plans)}"
         )
     for index, plan in enumerate(plans):
-        error = plan_error(graph, plan)
+        error = plan_error(scenario, plan)
         if error is not None:
             raise SimulationError(f"D{index + 1}: {error}")
     last = max(len(plan) for plan in plans)
@@ -80,15 +80,16 @@ def simulate(
         tuple(plan[turn] for plan in padded) for turn in range(last)
     )
     for turn in range(last - 1):
-        _check_capacity(graph, turn, states[turn], states[turn + 1])
+        _check_capacity(scenario, turn, states[turn], states[turn + 1])
     return StateHistory(states)
 
 
 def _check_capacity(
-    graph: MapGraph, turn: int, before: TurnState, after: TurnState
+    scenario: Scenario, turn: int, before: TurnState, after: TurnState
 ) -> None:
     """Check zone capacity at ``S_(t+1)`` and connection use in turn ``t``."""
-    zones = Counter(occupied_zone(graph, state) for state in after)
+    graph = scenario.graph
+    zones = Counter(occupied_zone(scenario, state) for state in after)
     for zone, count in zones.items():
         if zone is not None and count > graph.zone(zone).max_drones:
             raise SimulationError(

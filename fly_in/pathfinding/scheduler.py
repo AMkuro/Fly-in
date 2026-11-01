@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from fly_in.model.drone_state import DroneState
-from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.fallback import sequential_plans
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
@@ -28,29 +28,31 @@ def makespan(plans: Sequence[Sequence[DroneState]]) -> int:
 
 
 def schedule(
-    graph: MapGraph, attempts: int = ATTEMPTS
+    scenario: Scenario, attempts: int = ATTEMPTS
 ) -> list[list[DroneState]]:
     """Return the best complete plan set found, one plan per drone.
 
     Raises:
         NoPathError: If the end hub is unreachable.
     """
-    best = sequential_plans(graph, static_path(graph))
-    distance = turns_to_end(graph)
+    best = sequential_plans(scenario, static_path(scenario))
+    distance = turns_to_end(scenario)
     # DEC-018: one drone alone cannot arrive sooner than its static distance.
-    lower_bound = distance[graph.start_hub.name]
+    lower_bound = distance[scenario.start_name]
     for attempt in range(attempts):
         if makespan(best) == lower_bound:
             break
         params = SearchParams(congestion_weight=attempt % 2, seed=attempt)
-        plans = plan_all(graph, distance, makespan(best) - 1, params)
+        plans = plan_all(
+            scenario, distance, makespan(best) - 1, params
+        )
         if plans is not None:
             best = plans
     return best
 
 
 def plan_all(
-    graph: MapGraph,
+    scenario: Scenario,
     distance: dict[str, int],
     deadline: int,
     params: SearchParams,
@@ -60,8 +62,8 @@ def plan_all(
     A plan the Reservation rejects means Planner and Reservation disagree;
     the attempt is dropped like any other failure and the best plan stays.
     """
-    reservation = Reservation(graph)
-    for _ in range(graph.nb_drones):
+    reservation = Reservation(scenario)
+    for _ in range(scenario.nb_drones):
         plan = plan_drone(reservation, distance, deadline, params)
         if plan is None or reservation.try_add(plan) is not None:
             return None

@@ -6,11 +6,32 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from fly_in.model.connection_model import Connection
 from fly_in.model.map_graph import MapGraph
-from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.model.parsed_map import ParsedMap
+from fly_in.model.zone_model import Zone
+from fly_in.parse import FlyInMapParser
+from fly_in.parse.scenario_builder import build_scenario
 
 
 class MapGraphTests(unittest.TestCase):
+    def test_topology_does_not_require_execution_roles(self) -> None:
+        """An empty graph can exist independently of a scenario."""
+        graph = MapGraph.from_models({}, [])
+        self.assertEqual(dict(graph.zones), {})
+        self.assertEqual(graph.connections, ())
+
+    def check_parsed_objects(self, parsed: ParsedMap) -> MapGraph:
+        """Require graph construction to retain the parsed model instances."""
+        graph = build_scenario(parsed).graph
+        self.assertFalse(hasattr(graph, "nb_drones"))
+        for _, _, value in parsed.declarations:
+            if isinstance(value, Zone):
+                self.assertIs(graph.zones[value.name], value)
+            elif isinstance(value, Connection):
+                self.assertIs(graph.connection(value.name), value)
+        return graph
+
     def test_blocked_zones_preserve_topology(self) -> None:
         for blocked in ((), ("a",), ("b",), ("a", "b"), ("start",), ("end",)):
             with (
@@ -34,16 +55,15 @@ class MapGraphTests(unittest.TestCase):
                 ))
                 path = Path(directory) / "map.txt"
                 path.write_text("\n".join(lines), encoding="utf-8")
-                data = FlyInMapParser().load(path)
-                graph = MapGraph.from_map_data(data)
+                parsed = FlyInMapParser().load(str(path))
+                graph = self.check_parsed_objects(parsed)
 
-                self.assertEqual(dict(graph.zones), data.zones)
-                self.assertEqual(graph.start_hub, data.zones["start"])
-                self.assertEqual(graph.end_hub, data.zones["end"])
-                self.assertEqual(graph.connections, tuple(data.connections))
+                self.assertEqual(set(graph.zones), {"start", "end", "a", "b"})
+                self.assertFalse(hasattr(graph, "start_hub"))
+                self.assertFalse(hasattr(graph, "end_hub"))
                 self.assertEqual(len(graph.connections_by_name), 4)
                 self.assertEqual(len(graph.connections_by_key), 4)
-                for connection in data.connections:
+                for connection in graph.connections:
                     self.assertEqual(
                         graph.connection(connection.name), connection
                     )
@@ -75,7 +95,4 @@ class MapGraphTests(unittest.TestCase):
         self.assertTrue(paths)
         for path in paths:
             with self.subTest(path=path):
-                data = FlyInMapParser().load(path)
-                graph = MapGraph.from_map_data(data)
-                self.assertEqual(dict(graph.zones), data.zones)
-                self.assertEqual(graph.connections, tuple(data.connections))
+                self.check_parsed_objects(FlyInMapParser().load(str(path)))

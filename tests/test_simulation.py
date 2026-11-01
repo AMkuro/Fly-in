@@ -2,7 +2,7 @@
 
 import unittest
 
-from map_builder import graph_from_text
+from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.simulation.simulation import (
@@ -39,8 +39,8 @@ def column(delay: int) -> list[DroneState]:
 
 class SimulationTests(unittest.TestCase):
     def test_linear_column_history_and_output(self) -> None:
-        graph = graph_from_text(LINEAR)
-        history = simulate(graph, [column(0), column(1)])
+        scenario = scenario_from_text(LINEAR)
+        history = simulate(scenario, [column(0), column(1)])
         self.assertEqual(history.makespan, 4)
         self.assertEqual(history.states[0],
                          (AtZone("start"), AtZone("start")))
@@ -53,14 +53,14 @@ class SimulationTests(unittest.TestCase):
         ])
 
     def test_restricted_queue_matches_subject_example(self) -> None:
-        graph = graph_from_text(RESTRICTED)
+        scenario = scenario_from_text(RESTRICTED)
         first: list[DroneState] = [
             AtZone("start"), InTransit("start", "r"), AtZone("r"),
             AtZone("end")]
         second: list[DroneState] = [
             AtZone("start"), AtZone("start"), InTransit("start", "r"),
             AtZone("r"), AtZone("end")]
-        history = simulate(graph, [first, second])
+        history = simulate(scenario, [first, second])
         # Connection is printed in travel order even if declared r-start.
         self.assertEqual(movement_lines(history), [
             "D1-start-r",
@@ -70,23 +70,23 @@ class SimulationTests(unittest.TestCase):
         ])
 
     def test_rejects_capacity_conflicts(self) -> None:
-        graph = graph_from_text(LINEAR)
+        scenario = scenario_from_text(LINEAR)
         with self.assertRaisesRegex(SimulationError, "zone a holds 2"):
-            simulate(graph, [column(0), column(0)])
+            simulate(scenario, [column(0), column(0)])
 
     def test_rejects_illegal_plan_with_drone_id(self) -> None:
-        graph = graph_from_text(LINEAR)
+        scenario = scenario_from_text(LINEAR)
         stuck: list[DroneState] = [AtZone("start"), AtZone("a")]
         with self.assertRaisesRegex(SimulationError, "D2: .*end hub"):
-            simulate(graph, [column(0), stuck])
+            simulate(scenario, [column(0), stuck])
 
     def test_rejects_wrong_plan_count(self) -> None:
-        graph = graph_from_text(LINEAR)
+        scenario = scenario_from_text(LINEAR)
         with self.assertRaisesRegex(SimulationError, "expected 2 plans"):
-            simulate(graph, [column(0)])
+            simulate(scenario, [column(0)])
 
     def test_history_is_immutable(self) -> None:
-        history = simulate(graph_from_text(LINEAR), [column(0), column(1)])
+        history = simulate(scenario_from_text(LINEAR), [column(0), column(1)])
         self.assertIsInstance(history.states, tuple)
         self.assertIsInstance(history.states[0], tuple)
 

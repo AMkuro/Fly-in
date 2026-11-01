@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from map_builder import graph_from_text
+from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, InTransit
 from fly_in.pathfinding.fallback import path_states, sequential_plans
@@ -45,35 +45,35 @@ connection: wall-end
 
 class StaticPathTests(unittest.TestCase):
     def test_distances_use_entry_cost(self) -> None:
-        distance = turns_to_end(graph_from_text(FORK))
+        distance = turns_to_end(scenario_from_text(FORK))
         self.assertEqual(distance["start"], 2)
         self.assertEqual(distance["r"], 1)
         self.assertEqual(distance["end"], 0)
 
     def test_priority_wins_equal_arrival(self) -> None:
-        self.assertEqual(static_path(graph_from_text(FORK)),
+        self.assertEqual(static_path(scenario_from_text(FORK)),
                          ["start", "p", "end"])
 
     def test_restricted_route_when_it_is_the_only_one(self) -> None:
-        graph = graph_from_text(
+        scenario = scenario_from_text(
             "nb_drones: 1\nstart_hub: start 0 0\n"
             "hub: r 1 0 [zone=restricted]\nend_hub: end 2 0\n"
             "connection: start-r\nconnection: r-end\n")
-        path = static_path(graph)
-        self.assertEqual(path_states(graph, path), [
+        path = static_path(scenario)
+        self.assertEqual(path_states(scenario.graph, path), [
             AtZone("start"), InTransit("start", "r"), AtZone("r"),
             AtZone("end")])
 
     def test_blocked_zone_makes_end_unreachable(self) -> None:
         with self.assertRaisesRegex(NoPathError, "No path from start"):
-            static_path(graph_from_text(BLOCKED))
+            static_path(scenario_from_text(BLOCKED))
 
 
 class SequentialFallbackTests(unittest.TestCase):
     def test_makespan_is_drones_times_path_length(self) -> None:
-        graph = graph_from_text(FORK)
-        plans = sequential_plans(graph, static_path(graph))
-        history = simulate(graph, plans)
+        scenario = scenario_from_text(FORK)
+        plans = sequential_plans(scenario, static_path(scenario))
+        history = simulate(scenario, plans)
         self.assertEqual(history.makespan, 3 * 2)
         self.assertEqual(plans[1][:3], [AtZone("start")] * 3)
 

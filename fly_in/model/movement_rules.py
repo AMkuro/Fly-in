@@ -10,12 +10,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
-from fly_in.model.map_data import ZoneType
+from fly_in.model.zone_model import ZoneType
 from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 
 
 def step_error(
-    graph: MapGraph, before: DroneState, after: DroneState
+    scenario: Scenario, before: DroneState, after: DroneState
 ) -> str | None:
     """Return why ``before -> after`` is illegal for one turn, or ``None``.
 
@@ -23,13 +24,14 @@ def step_error(
     enter the connection toward an adjacent restricted zone, and arrive from
     that connection on the very next turn. A drone at the end never moves.
     """
+    graph = scenario.graph
     if isinstance(before, InTransit):
         if after != AtZone(before.to_zone):
             return f"{before} must arrive at {before.to_zone} next turn"
         return None
     if after == before:
         return None
-    if before.zone == graph.end_hub.name:
+    if before.zone == scenario.end_name:
         return f"delivered drone at {before.zone} must not move"
     if isinstance(after, InTransit):
         if after.from_zone != before.zone:
@@ -50,7 +52,7 @@ def step_error(
     return None
 
 
-def plan_error(graph: MapGraph, plan: Sequence[DroneState]) -> str | None:
+def plan_error(scenario: Scenario, plan: Sequence[DroneState]) -> str | None:
     """Return why a single-drone plan is illegal, or ``None``.
 
     ``plan[t]`` is the state ``S_t``. A plan starts at the start hub and ends
@@ -59,18 +61,18 @@ def plan_error(graph: MapGraph, plan: Sequence[DroneState]) -> str | None:
     """
     if not plan:
         return "empty plan"
-    if plan[0] != AtZone(graph.start_hub.name):
+    if plan[0] != AtZone(scenario.start_name):
         return f"plan starts at {plan[0]}, not at the start hub"
     for turn in range(len(plan) - 1):
-        error = step_error(graph, plan[turn], plan[turn + 1])
+        error = step_error(scenario, plan[turn], plan[turn + 1])
         if error is not None:
             return f"turn {turn}: {error}"
-    if plan[-1] != AtZone(graph.end_hub.name):
+    if plan[-1] != AtZone(scenario.end_name):
         return f"plan ends at {plan[-1]}, not at the end hub"
     return None
 
 
-def occupied_zone(graph: MapGraph, state: DroneState) -> str | None:
+def occupied_zone(scenario: Scenario, state: DroneState) -> str | None:
     """Return the capacity-limited zone the state occupies, if any.
 
     Start and end have no capacity limit; a drone in transit occupies its
@@ -78,7 +80,7 @@ def occupied_zone(graph: MapGraph, state: DroneState) -> str | None:
     """
     if isinstance(state, InTransit):
         return None
-    if state.zone in (graph.start_hub.name, graph.end_hub.name):
+    if state.zone in (scenario.start_name, scenario.end_name):
         return None
     return state.zone
 
