@@ -1,6 +1,8 @@
 """Connection settings and their local metadata constraints."""
 
-from pydantic import Field, ValidationInfo, field_validator
+from __future__ import annotations
+
+from pydantic import Field, field_validator, model_validator
 
 from fly_in.model.metadata_model import MetadataModel, MetadataSpec
 from fly_in.model.zone_model import _validate_zone_name
@@ -40,12 +42,15 @@ class Connection(MetadataModel):
 
     @field_validator("a", "b")
     @classmethod
-    def validate_endpoint(cls, value: str, info: ValidationInfo) -> str:
-        """Validate endpoint names and reject self-loops before assignment."""
-        value = _validate_zone_name(value, "connection endpoint")
-        other = "b" if info.field_name == "a" else "a"
-        if value == info.data.get(other):
+    def validate_endpoint(cls, value: str) -> str:
+        """Validate a connection endpoint name."""
+        return _validate_zone_name(value, "connection endpoint")
+
+    @model_validator(mode="after")
+    def reject_self_loop(self) -> Connection:
+        """Reject a connection whose endpoints are the same zone."""
+        if self.a == self.b:
             raise ValueError(
                 "connection endpoints must be different (self-loop)."
             )
-        return value
+        return self

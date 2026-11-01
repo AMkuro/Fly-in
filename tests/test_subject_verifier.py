@@ -2,8 +2,10 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
+from fly_in.model.map_graph import MapGraph
 from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from tools.verify_subject import MovementVerifier, SubjectVerifier
@@ -74,6 +76,24 @@ class MovementVerifierTests(unittest.TestCase):
         self.data = self.scenario.graph
         self.verifier = MovementVerifier(self.scenario)
 
+    def widen(
+        self, link_indexes: tuple[int, ...] = (), zone: str | None = None
+    ) -> MovementVerifier:
+        """Verify against a copied graph with capacity 2 where requested."""
+        graph = self.data
+        zones = dict(graph.zones)
+        if zone is not None:
+            zones[zone] = zones[zone].model_copy(update={"max_drones": 2})
+        connections = [
+            c.model_copy(update={"max_link_capacity": 2})
+            if i in link_indexes else c
+            for i, c in enumerate(graph.connections)
+        ]
+        scenario = replace(
+            self.scenario, graph=MapGraph.from_models(zones, connections)
+        )
+        return MovementVerifier(scenario)
+
     def test_departures_free_capacity_on_same_turn(self) -> None:
         """Allow another drone into a zone vacated during the same turn."""
         output = "D1-a\nD1-end D2-a\nD2-end\n"
@@ -99,17 +119,15 @@ class MovementVerifierTests(unittest.TestCase):
 
     def test_zone_capacity_is_independent_of_link_capacity(self) -> None:
         """A wider connection must not allow excess zone occupancy."""
-        self.data.connections[0].max_link_capacity = 2
+        verifier = self.widen(link_indexes=(0,))
         with self.assertRaisesRegex(ValueError, "zone capacity"):
-            self.verifier.verify("D1-a D2-a\n", 12)
+            verifier.verify("D1-a D2-a\n", 12)
 
     def test_capacity_metadata_is_honored(self) -> None:
         """Allow concurrent traversal only when both capacities permit it."""
-        self.data.connections[0].max_link_capacity = 2
-        self.data.connections[1].max_link_capacity = 2
-        self.data.zones["a"].max_drones = 2
+        verifier = self.widen(link_indexes=(0, 1), zone="a")
         output = "D1-a D2-a\nD1-end D2-end\n"
-        self.assertEqual(self.verifier.verify(output, 2), 2)
+        self.assertEqual(verifier.verify(output, 2), 2)
 
     def test_turn_limit_and_ansi_colors(self) -> None:
         """Count turns, while allowing terminal color escape sequences."""
