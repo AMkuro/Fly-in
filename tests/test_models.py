@@ -89,14 +89,14 @@ class ModelValidationTests(unittest.TestCase):
                     {**values, "max_link_capacity": token}
                 )
 
-    def test_connection_rejects_self_loops_without_mutating(self) -> None:
-        """Check creation and leave endpoints unchanged on rejected edits."""
+    def test_connection_rejects_self_loops_and_is_frozen(self) -> None:
+        """Reject self-loops at creation and any later field assignment."""
         with self.assertRaisesRegex(ValidationError, "self-loop"):
             Connection(name="A-A", a="A", b="A")
         connection = Connection(name="A-B", a="A", b="B")
         for field, value in (("a", "B"), ("b", "A")):
             with self.subTest(field=field):
-                with self.assertRaisesRegex(ValidationError, "self-loop"):
+                with self.assertRaisesRegex(ValidationError, "frozen"):
                     setattr(connection, field, value)
                 self.assertEqual((connection.a, connection.b), ("A", "B"))
 

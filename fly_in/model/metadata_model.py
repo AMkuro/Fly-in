@@ -24,7 +24,7 @@ class MetadataSpec(NamedTuple):
 class MetadataModel(BaseModel, ABC):
     """Map declaration metadata onto fields without overwriting any."""
 
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     @classmethod
     @abstractmethod
