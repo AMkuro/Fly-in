@@ -11,7 +11,7 @@ from fly_in.model.map_graph import MapGraph
 from fly_in.model.parsed_map import ParsedMap
 from fly_in.model.zone_model import Zone
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 
 
 class MapGraphTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class MapGraphTests(unittest.TestCase):
 
     def check_parsed_objects(self, parsed: ParsedMap) -> MapGraph:
         """Require graph construction to retain the parsed model instances."""
-        graph = build_scenario(parsed).graph
+        graph = ScenarioBuilder().build(parsed).graph
         self.assertFalse(hasattr(graph, "nb_drones"))
         for _, _, value in parsed.declarations:
             if isinstance(value, Zone):

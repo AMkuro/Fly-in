@@ -1,6 +1,6 @@
 from fly_in.model.scenario import Scenario
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.scheduler import schedule
 from fly_in.simulation.simulation import movement_lines, simulate
 
@@ -24,7 +24,9 @@ class FlyInApp:
             OSError: If the configuration file cannot be read.
             ValueError: If configuration parsing or validation fails.
         """
-        self._scenario = build_scenario(FlyInMapParser().load(filepath))
+        self._scenario = ScenarioBuilder().build(
+            FlyInMapParser().load(filepath)
+        )
         return self._scenario
 
     def _orchestra(

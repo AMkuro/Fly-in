@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from fly_in.model.connection_model import Connection, connection_key
+from fly_in.model.connection_model import Connection
 from fly_in.model.zone_model import Zone
 
 
@@ -71,7 +71,7 @@ class MapGraph:
     @staticmethod
     def connection_key(a: str, b: str) -> tuple[str, str]:
         """Return the canonical undirected key for two zone names."""
-        return connection_key(a, b)
+        return Connection.key(a, b)
 
     def zone(self, zone_name: str) -> Zone:
         """Return a zone by name."""

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 
 
 class ParserTests(unittest.TestCase):
@@ -44,7 +44,7 @@ class ParserTests(unittest.TestCase):
                 path.write_text(text)
                 with self.assertRaises(ValueError):
                     parsed = FlyInMapParser().load(str(path))
-                    build_scenario(parsed)
+                    ScenarioBuilder().build(parsed)
                 result = subprocess.run(
                     [sys.executable, "fly-in.py", str(path)],
                     capture_output=True, text=True, timeout=10,

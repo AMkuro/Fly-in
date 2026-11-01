@@ -3,34 +3,28 @@
 from typing import Literal
 
 from fly_in.model.connection_model import Connection
-from fly_in.model.parsed_map import (
-    LineKey,
-    MapParseError,
-    ParsedDeclaration,
-    ParsedLine,
-    ParsedMap,
-    ZoneLineKey,
-)
+from fly_in.model.line_key import LineKey, ZoneLineKey
+from fly_in.model.map_parse_error import MapParseError
+from fly_in.model.parsed_map import ParsedDeclaration, ParsedLine, ParsedMap
 from fly_in.model.zone_model import Zone
-from fly_in.parse.declaration_parser import (
-    parse_connection,
-    parse_nb_drones,
-    parse_zone,
-)
-from fly_in.parse.map_reader import read_numbered_map_lines
+from fly_in.parse.declaration_parser import DeclarationParser
+from fly_in.parse.map_reader import MapReader
 
 
 class FlyInMapParser:
     """Parse local objects for subsequent whole-map validation."""
 
+    def __init__(self) -> None:
+        """Create the parts this parser delegates to."""
+        self._reader = MapReader()
+        self._declarations = DeclarationParser()
+
     def load(self, filepath: str) -> ParsedMap:
         """Return local objects for subsequent MapGraph construction."""
-        numbered_lines, eof_line = read_numbered_map_lines(filepath)
-        return self._parse_declarations(numbered_lines, eof_line)
+        return self._parse_declarations(self._reader.read(filepath))
 
-    @classmethod
     def _parse_declarations(
-        cls, numbered_lines: list[ParsedLine], eof_line: int
+        self, numbered_lines: list[ParsedLine]
     ) -> ParsedMap:
         """Parse each numbered declaration while preserving source order."""
         declarations: list[ParsedDeclaration] = []
@@ -46,17 +40,14 @@ class FlyInMapParser:
                     f"expected: {valid_keys}.",
                 ) from error
             if key is LineKey.NB_DRONES:
-                counts.append(
-                    (line_number, parse_nb_drones(line_number, value))
-                )
+                number = self._declarations.parse_nb_drones(line_number, value)
+                counts.append((line_number, number))
             else:
                 declarations.append(
-                    cls._parse_declaration(line_number, key, value)
+                    self._parse_declaration(line_number, key, value)
                 )
         if not numbered_lines:
-            raise MapParseError(
-                eof_line, "EOF: input is empty; no declarations."
-            )
+            raise MapParseError(None, "input is empty; no declarations.")
         if numbered_lines[0][1] != LineKey.NB_DRONES.value:
             raise MapParseError(
                 numbered_lines[0][0],
@@ -67,10 +58,10 @@ class FlyInMapParser:
                 counts[1][0],
                 f"duplicate nb_drones; first defined on line {counts[0][0]}.",
             )
-        return ParsedMap(counts[0][1], declarations, eof_line)
+        return ParsedMap(counts[0][1], declarations)
 
-    @staticmethod
     def _parse_declaration(
+        self,
         line_number: int,
         key: ZoneLineKey | Literal[LineKey.CONNECTION],
         value: str,
@@ -79,10 +70,12 @@ class FlyInMapParser:
         try:
             if key is LineKey.CONNECTION:
                 connection = Connection.model_validate(
-                    parse_connection(line_number, value)
+                    self._declarations.parse_connection(line_number, value)
                 )
                 return line_number, key, connection
-            zone = Zone.model_validate(parse_zone(line_number, value))
+            zone = Zone.model_validate(
+                self._declarations.parse_zone(line_number, value)
+            )
             return line_number, key, zone
         except MapParseError:
             raise

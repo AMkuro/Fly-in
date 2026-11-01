@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fly_in.model.parsed_map import MapParseError, ParsedMap
+from fly_in.model.map_parse_error import MapParseError
+from fly_in.model.parsed_map import ParsedMap
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.map_validator import validate_map
+from fly_in.parse.map_validator import MapValidator
 
 
 class MapValidatorTests(unittest.TestCase):
@@ -20,7 +21,7 @@ class MapValidatorTests(unittest.TestCase):
             (base + "hub: A 2 0\n", 5, "duplicate zone"),
             (base.replace("A-B", "A-missing"), 4, "before connection"),
             (base + "connection: B-A\n", 5, "duplicate connection"),
-            ("nb_drones: 1\n", 2, "missing required"),
+            ("nb_drones: 1\n", None, "missing required"),
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "map.txt"
@@ -30,6 +31,6 @@ class MapValidatorTests(unittest.TestCase):
                     parsed = FlyInMapParser().load(str(path))
                     self.assertIsInstance(parsed, ParsedMap)
                     with self.assertRaises(MapParseError) as caught:
-                        validate_map(parsed)
+                        MapValidator(parsed).validate()
                     self.assertEqual(caught.exception.line_number, line)
                     self.assertIn(cause, str(caught.exception))

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fly_in.model.scenario import Scenario
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 
 
 def scenario_from_text(text: str) -> Scenario:
@@ -14,4 +14,4 @@ def scenario_from_text(text: str) -> Scenario:
         path = Path(directory) / "map.txt"
         path.write_text(text, encoding="utf-8")
         parsed = FlyInMapParser().load(str(path))
-        return build_scenario(parsed)
+        return ScenarioBuilder().build(parsed)

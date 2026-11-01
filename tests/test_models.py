@@ -5,6 +5,7 @@ import unittest
 from pydantic import ValidationError
 
 from fly_in.model.connection_model import Connection
+from fly_in.model.metadata_model import MetadataModel, MetadataSpec
 from fly_in.model.zone_model import Zone
 
 
@@ -98,3 +99,14 @@ class ModelValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValidationError, "self-loop"):
                     setattr(connection, field, value)
                 self.assertEqual((connection.a, connection.b), ("A", "B"))
+
+    def test_metadata_model_requires_a_spec(self) -> None:
+        """The base and a subclass without metadata_spec cannot be built."""
+        class Incomplete(MetadataModel):
+            pass
+
+        for model in (MetadataModel, Incomplete):
+            with self.subTest(model=model.__name__):
+                with self.assertRaises(TypeError):
+                    model()  # type: ignore[abstract]
+        self.assertIsInstance(Zone.metadata_spec(), MetadataSpec)

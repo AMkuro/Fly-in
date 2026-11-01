@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 from tools.verify_subject import MovementVerifier, SubjectVerifier
 
 
@@ -70,7 +70,7 @@ class MovementVerifierTests(unittest.TestCase):
         parsed = FlyInMapParser().load(
             "tests/fixtures/subject/mixed_zones.txt"
         )
-        self.scenario = build_scenario(parsed)
+        self.scenario = ScenarioBuilder().build(parsed)
         self.data = self.scenario.graph
         self.verifier = MovementVerifier(self.scenario)
 

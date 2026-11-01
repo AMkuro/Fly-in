@@ -7,7 +7,7 @@ from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
@@ -105,7 +105,7 @@ class SchedulerTests(unittest.TestCase):
         for name, optimum in OPTIMUM.items():
             with self.subTest(map=name):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
-                scenario = build_scenario(parsed)
+                scenario = ScenarioBuilder().build(parsed)
                 plans = schedule(scenario)
                 history = simulate(scenario, plans)
                 self.assertEqual(history.makespan, optimum)
@@ -115,7 +115,7 @@ class SchedulerTests(unittest.TestCase):
         for name in OPTIMUM:
             with self.subTest(map=name):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
-                scenario = build_scenario(parsed)
+                scenario = ScenarioBuilder().build(parsed)
                 plans = plan_all(
                     scenario, turns_to_end(scenario), 10_000,
                     SearchParams(),

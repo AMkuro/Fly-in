@@ -1,17 +1,10 @@
 """Zone settings and their local metadata constraints."""
 
 from enum import Enum
-from typing import ClassVar
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator
 
-from fly_in.common.validation import unpack_metadata, validate_integer_text
+from fly_in.model.metadata_model import MetadataModel, MetadataSpec
 
 
 class ZoneType(str, Enum):
@@ -39,14 +32,8 @@ def _validate_zone_name(value: str, field_name: str) -> str:
     return value
 
 
-class Zone(BaseModel):
+class Zone(MetadataModel):
     """A zone's settings, without parser source information."""
-
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-
-    METADATA_FIELDS: ClassVar[dict[str, str]] = {
-        "zone": "zone_type", "color": "color", "max_drones": "max_drones"
-    }
 
     name: str
     x: int
@@ -55,19 +42,18 @@ class Zone(BaseModel):
     color: str | None = None
     max_drones: int = Field(default=1, gt=0)
 
-    @model_validator(mode="before")
     @classmethod
-    def validate_metadata(cls, value: object) -> object:
-        """Validate metadata keys and map them to this model's fields."""
-        return unpack_metadata(value, cls.METADATA_FIELDS, "zone")
-
-    @field_validator("x", "y", "max_drones", mode="before")
-    @classmethod
-    def validate_integer_text(cls, value: object) -> object:
-        """Validate integer text, leaving conversion to Pydantic."""
-        if isinstance(value, str):
-            return validate_integer_text(value)
-        return value
+    def metadata_spec(cls) -> MetadataSpec:
+        """Describe the zone metadata block."""
+        return MetadataSpec(
+            "zone",
+            {
+                "zone": "zone_type",
+                "color": "color",
+                "max_drones": "max_drones",
+            },
+            frozenset({"x", "y", "max_drones"}),
+        )
 
     @field_validator("name")
     @classmethod
