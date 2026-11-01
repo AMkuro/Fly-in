@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 
 from fly_in.model.drone_state import DroneState
 from fly_in.model.scenario import Scenario
-from fly_in.pathfinding.fallback import sequential_plans
+from fly_in.pathfinding.fallback import SequentialFallback
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.static_distance import StaticDistance
@@ -35,7 +35,7 @@ def schedule(
         NoPathError: If the end hub is unreachable.
     """
     static = StaticDistance(scenario)
-    best = sequential_plans(scenario, static.path())
+    best = SequentialFallback(scenario, static.path()).plans()
     distance = static.turns_to_end
     lower_bound = distance[scenario.start_name]
     for attempt in range(attempts):
