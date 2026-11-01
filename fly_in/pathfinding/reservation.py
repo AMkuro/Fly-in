@@ -16,11 +16,7 @@ from typing import TypeVar
 from fly_in.model.drone_state import DroneState
 from fly_in.model.map_graph import MapGraph
 from fly_in.model.scenario import Scenario
-from fly_in.model.movement_rules import (
-    connection_used,
-    occupied_zone,
-    plan_error,
-)
+from fly_in.model.movement_rules import MovementRules
 
 ZoneDelta = dict[int, Counter[str]]
 ConnectionDelta = dict[int, Counter[tuple[str, str]]]
@@ -38,6 +34,7 @@ class Reservation:
     def __init__(self, scenario: Scenario) -> None:
         """Start with no planned drone; unplanned drones wait at start."""
         self._scenario = scenario
+        self._rules = MovementRules(scenario)
         self._plans: list[tuple[DroneState, ...]] = []
         self._zone_occupancy: ZoneDelta = {}
         self._connection_usage: ConnectionDelta = {}
@@ -80,7 +77,7 @@ class Reservation:
         cannot desynchronize the cache. On rejection nothing changes.
         """
         candidate = tuple(plan)
-        error = plan_error(self._scenario, candidate)
+        error = self._rules.plan_error(candidate)
         if error is not None:
             return error
         zone_delta, connection_delta = self._deltas(candidate)
@@ -99,11 +96,11 @@ class Reservation:
         zone_delta: ZoneDelta = {}
         connection_delta: ConnectionDelta = {}
         for turn, state in enumerate(plan):
-            zone = occupied_zone(self._scenario, state)
+            zone = self._rules.occupied_zone(state)
             if zone is not None:
                 zone_delta.setdefault(turn, Counter())[zone] += 1
             if turn + 1 < len(plan):
-                key = connection_used(state, plan[turn + 1])
+                key = self._rules.connection_used(state, plan[turn + 1])
                 if key is not None:
                     connection_delta.setdefault(turn, Counter())[key] += 1
         return zone_delta, connection_delta

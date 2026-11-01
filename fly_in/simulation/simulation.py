@@ -14,11 +14,7 @@ from typing import TypeAlias
 
 from fly_in.model.drone_state import DroneState, InTransit
 from fly_in.model.scenario import Scenario
-from fly_in.model.movement_rules import (
-    connection_used,
-    occupied_zone,
-    plan_error,
-)
+from fly_in.model.movement_rules import MovementRules
 
 TurnState: TypeAlias = tuple[DroneState, ...]
 """States of all drones at one time; index ``i`` is drone ``i + 1``."""
@@ -68,8 +64,9 @@ def simulate(
         raise SimulationError(
             f"expected {scenario.nb_drones} plans, got {len(plans)}"
         )
+    rules = MovementRules(scenario)
     for index, plan in enumerate(plans):
-        error = plan_error(scenario, plan)
+        error = rules.plan_error(plan)
         if error is not None:
             raise SimulationError(f"D{index + 1}: {error}")
     last = max(len(plan) for plan in plans)
@@ -80,22 +77,28 @@ def simulate(
         tuple(plan[turn] for plan in padded) for turn in range(last)
     )
     for turn in range(last - 1):
-        _check_capacity(scenario, turn, states[turn], states[turn + 1])
+        _check_capacity(
+            scenario, rules, turn, states[turn], states[turn + 1]
+        )
     return StateHistory(states)
 
 
 def _check_capacity(
-    scenario: Scenario, turn: int, before: TurnState, after: TurnState
+    scenario: Scenario,
+    rules: MovementRules,
+    turn: int,
+    before: TurnState,
+    after: TurnState,
 ) -> None:
     """Check zone capacity at ``S_(t+1)`` and connection use in turn ``t``."""
     graph = scenario.graph
-    zones = Counter(occupied_zone(scenario, state) for state in after)
+    zones = Counter(rules.occupied_zone(state) for state in after)
     for zone, count in zones.items():
         if zone is not None and count > graph.zone(zone).max_drones:
             raise SimulationError(
                 f"zone {zone} holds {count} drones at S_{turn + 1}"
             )
-    links = Counter(connection_used(old, new)
+    links = Counter(rules.connection_used(old, new)
                     for old, new in zip(before, after))
     for key, count in links.items():
         if key is None:
