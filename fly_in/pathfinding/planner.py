@@ -1,12 +1,12 @@
-"""Reservation-aware space-time A* for one drone (DEC-014/015).
+"""Reservation-aware space-time A* for one drone.
 
 A search node is ``(state, t)``: the drone is in ``state`` at ``S_t``.
 Each step costs one turn, so ``g = t`` and ``f = t + h`` where ``h`` is the
 static fewest turns to the end (admissible: other drones only add delay).
 The first goal popped is therefore the earliest legal arrival given the
-committed plans. Ties on ``f`` are broken by more priority zones entered
-(DEC-020), then by a congestion score and a seeded random order that the
-Scheduler varies between attempts (DEC-016).
+committed plans. Ties on ``f`` are broken by more priority zones entered,
+then by a congestion score and a seeded random order that the
+Scheduler varies between attempts.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.zone_model import ZoneType
 from fly_in.model.map_graph import MapGraph
 from fly_in.pathfinding.reservation import Reservation
-from fly_in.pathfinding.simple_dijkstra import entry_turns
+from fly_in.pathfinding.static_distance import entry_turns
 
 Node = tuple[DroneState, int]
 QueueItem = tuple[int, int, int, float, int, Node, Node | None]
@@ -48,7 +48,7 @@ def plan_drone(
     """Return the earliest legal plan arriving by ``deadline``, or ``None``.
 
     ``distance`` is ``turns_to_end`` of the same scenario. The reservation is
-    only read; committing the plan is the caller's job (DEC-028).
+    only read; committing the plan is the caller's job.
     """
     scenario = reservation.scenario
     goal = AtZone(scenario.end_name)

@@ -1,4 +1,4 @@
-"""Sequential delivery: one drone at a time along a static path (DEC-017).
+"""Sequential delivery: one drone at a time along a static path.
 
 Every drone waits at start (no capacity limit) until the previous one has
 reached the end (no capacity limit), so no two drones are ever between the
@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.map_graph import MapGraph
 from fly_in.model.scenario import Scenario
-from fly_in.pathfinding.simple_dijkstra import entry_turns
+from fly_in.pathfinding.static_distance import entry_turns
 
 
 def path_states(graph: MapGraph, path: Sequence[str]) -> list[DroneState]:

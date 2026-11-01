@@ -1,4 +1,4 @@
-"""Independent validation of complete plans into a StateHistory (DEC-019).
+"""Independent validation of complete plans into a StateHistory.
 
 Simulation does not trust the Reservation that accepted the plans. It
 rebuilds every turn state ``S_t`` for all drones and counts capacity from
@@ -58,11 +58,11 @@ def simulate(
 ) -> StateHistory:
     """Validate one plan per drone and return the confirmed history.
 
-    ``plans[i]`` becomes drone ``i + 1`` (DEC-025). A plan shorter than the
+    ``plans[i]`` becomes drone ``i + 1``. A plan shorter than the
     makespan is extended with its final ``AtZone(end)``.
 
     Raises:
-        SimulationError: If any T01 rule or the final delivery fails.
+        SimulationError: If a movement, capacity or delivery rule fails.
     """
     if len(plans) != scenario.nb_drones:
         raise SimulationError(
@@ -111,7 +111,7 @@ def _check_capacity(
 def movement_token(drone_id: int, state: DroneState) -> str:
     """Format one move as ``D<ID>-<zone>`` or ``D<ID>-<from>-<to>``.
 
-    The connection is written in travel order (DEC-013).
+    The connection is written in travel order.
     """
     if isinstance(state, InTransit):
         return f"D{drone_id}-{state.from_zone}-{state.to_zone}"

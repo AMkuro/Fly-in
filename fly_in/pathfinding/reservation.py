@@ -1,4 +1,4 @@
-"""Committed single-drone plans plus a sparse capacity cache (DEC-027/028).
+"""Committed single-drone plans plus a sparse capacity cache.
 
 The committed plans are the source of truth. ``zone_occupancy[t][zone]`` is
 the number of drones in ``zone`` at state ``S_t``; ``connection_usage[t]

@@ -8,7 +8,7 @@ from fly_in.model.drone_state import AtZone
 from fly_in.model.movement_rules import occupied_zone
 from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.scheduler import schedule
-from fly_in.pathfinding.simple_dijkstra import static_path
+from fly_in.pathfinding.static_distance import static_path
 from fly_in.simulation.simulation import simulate
 
 MAP = (

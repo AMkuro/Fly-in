@@ -1,6 +1,6 @@
-"""Whole-plan retries around the reservation-aware Planner (DEC-016..018).
+"""Whole-plan retries around the reservation-aware Planner.
 
-1. The sequential fallback (DEC-017) gives a legal plan with makespan ``U``.
+1. The sequential fallback gives a legal plan with makespan ``U``.
 2. Each attempt starts from an empty Reservation and plans every drone in
    turn with deadline ``U - 1``, so only strictly better plans succeed.
 3. Stop after ``attempts`` tries or when ``U`` reaches the lower bound.
@@ -16,9 +16,8 @@ from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.fallback import sequential_plans
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
-from fly_in.pathfinding.simple_dijkstra import static_path, turns_to_end
+from fly_in.pathfinding.static_distance import static_path, turns_to_end
 
-# ponytail: fixed budget and parameter cycle; tune once benchmarks need it.
 ATTEMPTS = 8
 
 
@@ -37,15 +36,12 @@ def schedule(
     """
     best = sequential_plans(scenario, static_path(scenario))
     distance = turns_to_end(scenario)
-    # DEC-018: one drone alone cannot arrive sooner than its static distance.
     lower_bound = distance[scenario.start_name]
     for attempt in range(attempts):
         if makespan(best) == lower_bound:
             break
         params = SearchParams(congestion_weight=attempt % 2, seed=attempt)
-        plans = plan_all(
-            scenario, distance, makespan(best) - 1, params
-        )
+        plans = plan_all(scenario, distance, makespan(best) - 1, params)
         if plans is not None:
             best = plans
     return best

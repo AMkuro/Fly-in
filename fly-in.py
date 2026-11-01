@@ -2,7 +2,7 @@ import argparse
 import sys
 
 from fly_in.orchestra import FlyInApp
-from fly_in.pathfinding.simple_dijkstra import NoPathError
+from fly_in.pathfinding.static_distance import NoPathError
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:

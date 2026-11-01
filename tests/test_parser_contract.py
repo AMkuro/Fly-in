@@ -15,7 +15,7 @@ from fly_in.parse import FlyInMapParser, MapParseError
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.parse.declaration_parser import DeclarationParser
 from fly_in.parse.map_reader import MapReader
-from fly_in.pathfinding.simple_dijkstra import NoPathError, static_path
+from fly_in.pathfinding.static_distance import NoPathError, static_path
 
 
 class ParserContractTests(unittest.TestCase):
@@ -388,7 +388,7 @@ class ParserContractTests(unittest.TestCase):
         )
 
     def test_start_end_capacities_are_validated_but_not_enforced(self) -> None:
-        """DEC-010 accepts positive metadata without limiting hub occupancy."""
+        """Accept positive metadata without limiting hub occupancy."""
         self.load(self.MAP.replace(
             "start 0 0", "start 0 0 [max_drones=1]"
         ).replace("end 1 0", "end 1 0 [max_drones=1]"))

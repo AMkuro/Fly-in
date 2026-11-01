@@ -10,7 +10,7 @@ from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, InTransit
 from fly_in.pathfinding.fallback import path_states, sequential_plans
-from fly_in.pathfinding.simple_dijkstra import (
+from fly_in.pathfinding.static_distance import (
     NoPathError,
     static_path,
     turns_to_end,
