@@ -29,9 +29,7 @@ class FlyInApp:
         )
         return self._scenario
 
-    def _orchestra(
-        self, scenario: Scenario, use_gui: bool
-    ) -> None:
+    def _orchestra(self, scenario: Scenario, use_gui: bool) -> None:
         """Run the current application flow for the parsed map."""
         if use_gui:
             self._open_gui(scenario)
@@ -52,10 +50,10 @@ class FlyInApp:
 
         Raises:
             NoPathError: If the end hub is unreachable.
-            SimulationError: If the chosen plans break a T01 rule.
+            SimulationError: If the chosen plans break a movement rule.
         """
-        plans = schedule(scenario)
-        for line in movement_lines(simulate(scenario, plans)):
+        scheduled_plans = schedule(scenario)
+        for line in movement_lines(simulate(scenario, scheduled_plans)):
             print(line)
 
     def run(self, filepath: str, use_gui: bool = False) -> None:

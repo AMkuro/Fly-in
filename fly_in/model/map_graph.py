@@ -20,8 +20,8 @@ class MapGraph:
 
     zones: Mapping[str, Zone]
     connections: tuple[Connection, ...]
-    _connections_by_key: Mapping[tuple[str, str], Connection]
-    _neighbors_by_zone: Mapping[str, tuple[str, ...]]
+    _connections_by_pair: Mapping[tuple[str, str], Connection]
+    _zone_adjacency: Mapping[str, tuple[str, ...]]
 
     @classmethod
     def from_models(
@@ -29,25 +29,25 @@ class MapGraph:
     ) -> MapGraph:
         """Build topology indexes from already validated map models."""
         zones = dict(zones)
-        connections_by_key: dict[tuple[str, str], Connection] = {}
-        neighbors_by_zone: dict[str, list[str]] = {
+        connections_by_pair: dict[tuple[str, str], Connection] = {}
+        zone_adjacency: dict[str, list[str]] = {
             zone_name: [] for zone_name in zones
         }
 
         for connection in connections:
             key = cls.connection_key(connection.a, connection.b)
-            connections_by_key[key] = connection
-            neighbors_by_zone[connection.a].append(connection.b)
-            neighbors_by_zone[connection.b].append(connection.a)
+            connections_by_pair[key] = connection
+            zone_adjacency[connection.a].append(connection.b)
+            zone_adjacency[connection.b].append(connection.a)
 
         return cls(
             zones=MappingProxyType(zones),
             connections=tuple(connections),
-            _connections_by_key=MappingProxyType(connections_by_key),
-            _neighbors_by_zone=MappingProxyType(
+            _connections_by_pair=MappingProxyType(connections_by_pair),
+            _zone_adjacency=MappingProxyType(
                 {
                     zone_name: tuple(neighbors)
-                    for zone_name, neighbors in neighbors_by_zone.items()
+                    for zone_name, neighbors in zone_adjacency.items()
                 }
             ),
         )
@@ -63,14 +63,14 @@ class MapGraph:
 
     def neighbors_for(self, zone_name: str) -> tuple[str, ...]:
         """Return every directly adjacent zone name."""
-        return self._neighbors_by_zone[zone_name]
+        return self._zone_adjacency[zone_name]
 
     def link_capacity(self, a: str, b: str) -> int:
         """Return the capacity of the existing connection between two zones."""
-        return self._connections_by_key[
+        return self._connections_by_pair[
             self.connection_key(a, b)
         ].max_link_capacity
 
     def connection_between(self, a: str, b: str) -> Connection | None:
         """Return the connection between two zones, if one exists."""
-        return self._connections_by_key.get(self.connection_key(a, b))
+        return self._connections_by_pair.get(self.connection_key(a, b))

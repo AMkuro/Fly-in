@@ -11,7 +11,7 @@ from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
-from fly_in.pathfinding.simple_dijkstra import NoPathError, turns_to_end
+from fly_in.pathfinding.static_distance import NoPathError, turns_to_end
 from fly_in.simulation.simulation import simulate
 
 ROOT = Path(__file__).resolve().parent.parent

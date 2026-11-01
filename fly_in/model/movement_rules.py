@@ -1,4 +1,4 @@
-"""Per-drone movement rules shared by plan validation (T01).
+"""Per-drone movement rules shared by plan validation.
 
 These functions look at one drone only. Capacity is a property of all drones
 at the same time and is counted by the callers (Reservation, Simulation)
@@ -92,7 +92,7 @@ def connection_used(
 
     A one-turn move and entering a restricted connection both count. The
     forced arrival off a connection adds nothing: the drone frees the
-    connection that same turn (Subject VII.3, DEC-027).
+    connection that same turn (Subject VII.3).
     """
     if isinstance(before, InTransit):
         return None
