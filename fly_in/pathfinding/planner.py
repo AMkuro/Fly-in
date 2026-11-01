@@ -21,7 +21,6 @@ from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.zone_model import ZoneType
 from fly_in.model.map_graph import MapGraph
 from fly_in.pathfinding.reservation import Reservation
-from fly_in.pathfinding.static_distance import entry_turns
 
 Node = tuple[DroneState, int]
 QueueItem = tuple[int, int, int, float, int, Node, Node | None]
@@ -119,7 +118,7 @@ def _successors(
     if _zone_has_room(reservation, state.zone, turn + 1):
         result.append((state, 0, _zone_crowd(reservation, state, turn + 1)))
     for neighbor in graph.neighbors_for(state.zone):
-        turns = entry_turns(graph, neighbor)
+        turns = graph.zone(neighbor).entry_turns
         key = MapGraph.connection_key(state.zone, neighbor)
         link_used = reservation.connection_usage(turn, key)
         if turns is None or link_used >= reservation.connection_capacity(key):
