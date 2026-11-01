@@ -9,7 +9,7 @@ from map_builder import scenario_from_text
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
-from fly_in.pathfinding.planner import SearchParams, plan_drone
+from fly_in.pathfinding.planner import SearchParams, SpaceTimePlanner
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
 from fly_in.pathfinding.static_distance import NoPathError, StaticDistance
@@ -43,6 +43,16 @@ connection: a-end
 def planner_inputs(text: str) -> tuple[Reservation, Mapping[str, int]]:
     scenario = scenario_from_text(text)
     return Reservation(scenario), StaticDistance(scenario).turns_to_end
+
+
+def plan_drone(
+    reservation: Reservation,
+    distance: Mapping[str, int],
+    deadline: int,
+    params: SearchParams,
+) -> list[DroneState] | None:
+    """Plan one drone with a planner built for this call."""
+    return SpaceTimePlanner(reservation, distance, params).plan(deadline)
 
 
 class PlannerTests(unittest.TestCase):

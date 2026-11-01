@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from fly_in.model.drone_state import DroneState
 from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.fallback import SequentialFallback
-from fly_in.pathfinding.planner import SearchParams, plan_drone
+from fly_in.pathfinding.planner import SearchParams, SpaceTimePlanner
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.static_distance import StaticDistance
 
@@ -61,7 +61,7 @@ def plan_all(
     """
     reservation = Reservation(scenario)
     for _ in range(scenario.nb_drones):
-        plan = plan_drone(reservation, distance, deadline, params)
+        plan = SpaceTimePlanner(reservation, distance, params).plan(deadline)
         if plan is None or reservation.try_add(plan) is not None:
             return None
     return [list(plan) for plan in reservation.plans]
