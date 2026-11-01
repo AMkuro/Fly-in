@@ -14,6 +14,7 @@ from __future__ import annotations
 import heapq
 import itertools
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
@@ -41,14 +42,14 @@ class SearchParams:
 
 def plan_drone(
     reservation: Reservation,
-    distance: dict[str, int],
+    distance: Mapping[str, int],
     deadline: int,
     params: SearchParams,
 ) -> list[DroneState] | None:
     """Return the earliest legal plan arriving by ``deadline``, or ``None``.
 
-    ``distance`` is ``turns_to_end`` of the same scenario. The reservation is
-    only read; committing the plan is the caller's job.
+    ``distance`` is ``StaticDistance.turns_to_end`` of the same scenario.
+    The reservation is only read; committing the plan is the caller's job.
     """
     scenario = reservation.scenario
     goal = AtZone(scenario.end_name)
@@ -87,13 +88,13 @@ def plan_drone(
     return None
 
 
-def _unreachable(state: DroneState, distance: dict[str, int]) -> bool:
+def _unreachable(state: DroneState, distance: Mapping[str, int]) -> bool:
     """Return whether the end cannot be reached from ``state`` at all."""
     zone = state.to_zone if isinstance(state, InTransit) else state.zone
     return zone not in distance
 
 
-def _heuristic(state: DroneState, distance: dict[str, int]) -> int:
+def _heuristic(state: DroneState, distance: Mapping[str, int]) -> int:
     """Static fewest turns to the end; a transit still needs its arrival."""
     if isinstance(state, InTransit):
         return 1 + distance[state.to_zone]

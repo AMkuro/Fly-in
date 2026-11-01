@@ -15,7 +15,7 @@ from fly_in.parse import FlyInMapParser, MapParseError
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.parse.declaration_parser import DeclarationParser
 from fly_in.parse.map_reader import MapReader
-from fly_in.pathfinding.static_distance import NoPathError, static_path
+from fly_in.pathfinding.static_distance import NoPathError, StaticDistance
 
 
 class ParserContractTests(unittest.TestCase):
@@ -370,7 +370,7 @@ class ParserContractTests(unittest.TestCase):
                 "hub: C 1 0 [zone=blocked]\n" + links
             )
             with self.assertRaises(NoPathError):
-                static_path(data)
+                StaticDistance(data).path()
             result = subprocess.run(
                 [sys.executable, "fly-in.py", str(self.path)],
                 capture_output=True, text=True, timeout=10,
