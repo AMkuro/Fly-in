@@ -21,17 +21,6 @@ class ZoneType(str, Enum):
         return tuple(item.value for item in cls)
 
 
-def _validate_zone_name(value: str, field_name: str) -> str:
-    """Validate a zone name shared by map values and drone states."""
-    if not value:
-        raise ValueError(f"{field_name} must not be empty.")
-    if "-" in value:
-        raise ValueError(f"{field_name} must not contain dashes.")
-    if any(char.isspace() for char in value):
-        raise ValueError(f"{field_name} must not contain spaces.")
-    return value
-
-
 class Zone(MetadataModel):
     """A zone's settings, without parser source information."""
 
@@ -55,11 +44,22 @@ class Zone(MetadataModel):
             frozenset({"x", "y", "max_drones"}),
         )
 
+    @staticmethod
+    def check_name(value: str, field_name: str) -> str:
+        """Validate a zone name shared by map values and drone states."""
+        if not value:
+            raise ValueError(f"{field_name} must not be empty.")
+        if "-" in value:
+            raise ValueError(f"{field_name} must not contain dashes.")
+        if any(char.isspace() for char in value):
+            raise ValueError(f"{field_name} must not contain spaces.")
+        return value
+
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
         """Validate subject constraints for zone names."""
-        return _validate_zone_name(value, "zone name")
+        return Zone.check_name(value, "zone name")
 
     @field_validator("color")
     @classmethod
