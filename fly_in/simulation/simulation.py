@@ -100,7 +100,7 @@ def _check_capacity(
     for key, count in links.items():
         if key is None:
             continue
-        capacity = graph.connections_by_key[key].max_link_capacity
+        capacity = graph.link_capacity(*key)
         if count > capacity:
             raise SimulationError(
                 f"connection {key[0]}-{key[1]} used {count} times "

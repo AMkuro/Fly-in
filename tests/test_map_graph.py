@@ -29,7 +29,9 @@ class MapGraphTests(unittest.TestCase):
             if isinstance(value, Zone):
                 self.assertIs(graph.zones[value.name], value)
             elif isinstance(value, Connection):
-                self.assertIs(graph.connection(value.name), value)
+                self.assertIs(
+                    graph.connection_between(value.a, value.b), value
+                )
         return graph
 
     def test_blocked_zones_preserve_topology(self) -> None:
@@ -61,12 +63,8 @@ class MapGraphTests(unittest.TestCase):
                 self.assertEqual(set(graph.zones), {"start", "end", "a", "b"})
                 self.assertFalse(hasattr(graph, "start_hub"))
                 self.assertFalse(hasattr(graph, "end_hub"))
-                self.assertEqual(len(graph.connections_by_name), 4)
-                self.assertEqual(len(graph.connections_by_key), 4)
+                self.assertEqual(len(graph.connections), 4)
                 for connection in graph.connections:
-                    self.assertEqual(
-                        graph.connection(connection.name), connection
-                    )
                     self.assertEqual(
                         graph.connection_between(connection.b, connection.a),
                         connection,
@@ -75,7 +73,6 @@ class MapGraphTests(unittest.TestCase):
                         (connection.a, connection.b),
                         (connection.b, connection.a),
                     ):
-                        self.assertIn(connection, graph.connections_for(a))
                         self.assertIn(b, graph.neighbors_for(a))
                 result = subprocess.run(
                     [sys.executable, "fly-in.py", str(path)],

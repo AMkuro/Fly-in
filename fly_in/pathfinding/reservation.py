@@ -71,7 +71,7 @@ class Reservation:
 
     def connection_capacity(self, key: tuple[str, str]) -> int:
         """Return the static capacity of an undirected connection."""
-        return self._scenario.graph.connections_by_key[key].max_link_capacity
+        return self._scenario.graph.link_capacity(*key)
 
     def try_add(self, plan: Sequence[DroneState]) -> str | None:
         """Commit ``plan`` if legal; return ``None`` or the rejection reason.
