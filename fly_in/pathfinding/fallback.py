@@ -12,6 +12,7 @@ from collections.abc import Sequence
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.simple_dijkstra import entry_turns
 
 
@@ -26,12 +27,12 @@ def path_states(graph: MapGraph, path: Sequence[str]) -> list[DroneState]:
 
 
 def sequential_plans(
-    graph: MapGraph, path: Sequence[str]
+    scenario: Scenario, path: Sequence[str]
 ) -> list[list[DroneState]]:
     """Return one plan per drone; drone ``k`` departs at turn ``k * L``."""
-    route = path_states(graph, path)
+    route = path_states(scenario.graph, path)
     length = len(route) - 1
-    start: list[DroneState] = [AtZone(graph.start_hub.name)]
+    start: list[DroneState] = [AtZone(scenario.start_name)]
     return [
-        start * (drone * length) + route for drone in range(graph.nb_drones)
+        start * (drone * length) + route for drone in range(scenario.nb_drones)
     ]

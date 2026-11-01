@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import heapq
 
-from fly_in.model.map_data import ZoneType
+from fly_in.model.zone_model import ZoneType
 from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 
 
 class NoPathError(ValueError):
@@ -28,13 +29,14 @@ def entry_turns(graph: MapGraph, zone: str) -> int | None:
     return 2 if zone_type is ZoneType.RESTRICTED else 1
 
 
-def turns_to_end(graph: MapGraph) -> dict[str, int]:
+def turns_to_end(scenario: Scenario) -> dict[str, int]:
     """Return the fewest turns from each zone to the end; unreachable absent.
 
     Dijkstra runs backward from the end. Moving ``u -> v`` costs the entry
     turns of ``v``, so relaxing from ``v`` adds ``entry_turns(v)``.
     """
-    end = graph.end_hub.name
+    graph = scenario.graph
+    end = scenario.end_name
     distance = {end: 0}
     queue = [(0, end)]
     while queue:
@@ -52,7 +54,7 @@ def turns_to_end(graph: MapGraph) -> dict[str, int]:
     return distance
 
 
-def static_path(graph: MapGraph) -> list[str]:
+def static_path(scenario: Scenario) -> list[str]:
     """Return one fewest-turn zone path from start to end.
 
     Among equally fast next steps a priority zone is taken first (DEC-020),
@@ -61,12 +63,13 @@ def static_path(graph: MapGraph) -> list[str]:
     Raises:
         NoPathError: If the end is unreachable.
     """
-    distance = turns_to_end(graph)
-    zone = graph.start_hub.name
+    graph = scenario.graph
+    distance = turns_to_end(scenario)
+    zone = scenario.start_name
     if zone not in distance:
         raise NoPathError()
     path = [zone]
-    while zone != graph.end_hub.name:
+    while zone != scenario.end_name:
         steps = [
             neighbor for neighbor in graph.neighbors_for(zone)
             if neighbor in distance

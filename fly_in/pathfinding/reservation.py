@@ -15,6 +15,7 @@ from typing import TypeVar
 
 from fly_in.model.drone_state import DroneState
 from fly_in.model.map_graph import MapGraph
+from fly_in.model.scenario import Scenario
 from fly_in.model.movement_rules import (
     connection_used,
     occupied_zone,
@@ -34,9 +35,9 @@ class Reservation:
     what ``_deltas`` would rebuild from the committed plans.
     """
 
-    def __init__(self, graph: MapGraph) -> None:
+    def __init__(self, scenario: Scenario) -> None:
         """Start with no planned drone; unplanned drones wait at start."""
-        self._graph = graph
+        self._scenario = scenario
         self._plans: list[tuple[DroneState, ...]] = []
         self._zone_occupancy: ZoneDelta = {}
         self._connection_usage: ConnectionDelta = {}
@@ -44,7 +45,12 @@ class Reservation:
     @property
     def graph(self) -> MapGraph:
         """Return the static map whose capacities are enforced."""
-        return self._graph
+        return self._scenario.graph
+
+    @property
+    def scenario(self) -> Scenario:
+        """Return the execution settings whose plans are reserved."""
+        return self._scenario
 
     @property
     def plans(self) -> tuple[tuple[DroneState, ...], ...]:
@@ -61,11 +67,11 @@ class Reservation:
 
     def zone_capacity(self, zone: str) -> int:
         """Return the static capacity of a capacity-limited zone."""
-        return self._graph.zone(zone).max_drones
+        return self._scenario.graph.zone(zone).max_drones
 
     def connection_capacity(self, key: tuple[str, str]) -> int:
         """Return the static capacity of an undirected connection."""
-        return self._graph.connections_by_key[key].max_link_capacity
+        return self._scenario.graph.connections_by_key[key].max_link_capacity
 
     def try_add(self, plan: Sequence[DroneState]) -> str | None:
         """Commit ``plan`` if legal; return ``None`` or the rejection reason.
@@ -74,7 +80,7 @@ class Reservation:
         cannot desynchronize the cache. On rejection nothing changes.
         """
         candidate = tuple(plan)
-        error = plan_error(self._graph, candidate)
+        error = plan_error(self._scenario, candidate)
         if error is not None:
             return error
         zone_delta, connection_delta = self._deltas(candidate)
@@ -93,7 +99,7 @@ class Reservation:
         zone_delta: ZoneDelta = {}
         connection_delta: ConnectionDelta = {}
         for turn, state in enumerate(plan):
-            zone = occupied_zone(self._graph, state)
+            zone = occupied_zone(self._scenario, state)
             if zone is not None:
                 zone_delta.setdefault(turn, Counter())[zone] += 1
             if turn + 1 < len(plan):
