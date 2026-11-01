@@ -17,7 +17,7 @@ from pathlib import Path
 from fly_in.model.scenario import Scenario
 from fly_in.model.zone_model import ZoneType
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 
 
 class MovementVerifier:
@@ -200,7 +200,7 @@ class SubjectVerifier:
         )
         for path, limit in cases:
             parsed = FlyInMapParser().load(str(path))
-            scenario = build_scenario(parsed)
+            scenario = ScenarioBuilder().build(parsed)
             result = subprocess.run(
                 [sys.executable, str(self.root / "fly-in.py"), str(path)],
                 cwd=self.root, capture_output=True, text=True, timeout=20,

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from fly_in.parse import FlyInMapParser
-from fly_in.parse.scenario_builder import build_scenario
+from fly_in.parse.scenario_builder import ScenarioBuilder
 
 try:
     import tkinter as tk
@@ -33,7 +33,7 @@ class InspectorTests(unittest.TestCase):
                 "connection: middle-A\n"
             )
             parsed = FlyInMapParser().load(str(path))
-            self.scenario = build_scenario(parsed)
+            self.scenario = ScenarioBuilder().build(parsed)
             self.data = self.scenario.graph
         self.panel = object.__new__(InspectorPanel)
         self.panel._title_var = Mock(spec=tk.StringVar)

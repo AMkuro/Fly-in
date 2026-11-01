@@ -12,12 +12,9 @@ from fly_in.model.connection_model import Connection
 from fly_in.model.scenario import Scenario
 from fly_in.model.zone_model import Zone, ZoneType
 from fly_in.parse import FlyInMapParser, MapParseError
-from fly_in.parse.scenario_builder import build_scenario
-from fly_in.parse.declaration_parser import parse_connection, parse_zone
-from fly_in.parse.map_reader import (
-    parse_key_value_line,
-    read_numbered_map_lines,
-)
+from fly_in.parse.scenario_builder import ScenarioBuilder
+from fly_in.parse.declaration_parser import DeclarationParser
+from fly_in.parse.map_reader import MapReader
 from fly_in.pathfinding.simple_dijkstra import NoPathError, static_path
 
 
@@ -39,15 +36,17 @@ class ParserContractTests(unittest.TestCase):
         """Read inline input through the public file-based API."""
         self.path.write_text(text, encoding="utf-8")
         parsed = FlyInMapParser().load(str(self.path))
-        return build_scenario(parsed)
+        return ScenarioBuilder().build(parsed)
 
-    def check_error(self, text: str, line: int, *causes: str) -> str:
-        """Require a parser error with an exact physical position and cause."""
+    def check_error(self, text: str, line: int | None, *causes: str) -> str:
+        """Require a parser error at an exact line (or none) and cause."""
         with self.assertRaises(MapParseError) as caught:
             self.load(text)
         error = caught.exception
         self.assertEqual(error.line_number, line)
-        self.assertTrue(str(error).startswith(f"line {line}: "))
+        prefix = "" if line is None else f"line {line}: "
+        self.assertTrue(str(error).startswith(prefix))
+        self.assertEqual(str(error).startswith("line "), line is not None)
         for cause in causes:
             self.assertIn(cause, str(error))
         return str(error)
@@ -65,10 +64,9 @@ class ParserContractTests(unittest.TestCase):
         """Reader accepts unknown keys; declaration parsing rejects them."""
         text = "# header\ncustom: opaque payload\n\n"
         self.path.write_text(text)
-        numbered_lines, eof_line = read_numbered_map_lines(str(self.path))
+        numbered_lines = MapReader().read(str(self.path))
         self.assertEqual(numbered_lines, [(2, "custom", "opaque payload")])
-        self.assertEqual(eof_line, 4)
-        known_line = parse_key_value_line(5, "nb_drones: 2")
+        known_line = MapReader.parse_key_value_line(5, "nb_drones: 2")
         self.assertEqual(known_line, (5, "nb_drones", "2"))
         self.assertIs(type(known_line[1]), str)
         self.check_error(text, 2, "unknown declaration", "custom")
@@ -270,16 +268,16 @@ class ParserContractTests(unittest.TestCase):
             FlyInMapParser().load(str(self.path)).nb_drones, count
         )
 
-    def test_physical_lines_and_eof(self) -> None:
-        """Retain blank/comment-only tail lines for P01 and missing hubs."""
-        for text, eof in (("", 1), ("# comment\n\n", 3), ("\n \n", 3)):
-            self.check_error(text, eof, "EOF", "empty")
-        self.check_error("nb_drones: 1\n# trailing\n\n", 4,
-                         "EOF", "start_hub", "end_hub")
-        self.check_error("nb_drones: 1\nstart_hub: A 0 0", 3,
-                         "EOF", "end_hub")
-        self.check_error("nb_drones: 1\nend_hub: B 1 0\n", 3,
-                         "EOF", "start_hub")
+    def test_empty_and_missing_declarations_have_no_line(self) -> None:
+        """Absent declarations have no source line to report."""
+        for text in ("", "# comment\n\n", "\n \n"):
+            self.check_error(text, None, "empty")
+        self.check_error("nb_drones: 1\n# trailing\n\n", None,
+                         "missing", "start_hub", "end_hub")
+        self.check_error("nb_drones: 1\nstart_hub: A 0 0", None,
+                         "missing", "end_hub")
+        self.check_error("nb_drones: 1\nend_hub: B 1 0\n", None,
+                         "missing", "start_hub")
         self.check_error(
             "# header\n\nnb_drones: 1\nstart_hub: A 0 0\n"
             "# middle\n\nend_hub: B nope 0\n", 7, "x",
@@ -351,16 +349,16 @@ class ParserContractTests(unittest.TestCase):
         self.assertIs(data.graph.connections[0], connections[0])
         self.assertNotIn("line_number", connections[0].model_dump())
         self.assertFalse(hasattr(data, "declarations"))
-        self.assertFalse(hasattr(data, "eof_line"))
 
     def test_splitting_leaves_value_validation_to_the_caller(self) -> None:
         """Syntax helpers keep raw values for subsequent model validation."""
-        zone = parse_zone(7, "A 1.0 0 [zone=unknown max_drones=-1]")
+        parser = DeclarationParser()
+        zone = parser.parse_zone(7, "A 1.0 0 [zone=unknown max_drones=-1]")
         self.assertEqual(zone["x"], "1.0")
         self.assertEqual(zone["metadata"], {
             "zone": "unknown", "max_drones": "-1",
         })
-        connection = parse_connection(8, "A-A [max_link_capacity=0]")
+        connection = parser.parse_connection(8, "A-A [max_link_capacity=0]")
         self.assertEqual(connection["a"], connection["b"])
         self.assertEqual(connection["metadata"], {"max_link_capacity": "0"})
 
@@ -404,8 +402,8 @@ class ParserContractTests(unittest.TestCase):
     def test_cli_source_errors_are_concise(self) -> None:
         """Preserve stderr and exit code without configuration tracebacks."""
         for text, line, cause in (
-            ("", 1, "empty"),
-            ("nb_drones: 1\n# trailing\n", 3, "EOF"),
+            ("", None, "empty"),
+            ("nb_drones: 1\n# trailing\n", None, "missing"),
             (self.MAP.replace("end 1 0", "end 0 0"), 3, "coordinates"),
             (self.MAP.replace("end 1 0", "end 1 0 ]color=red["),
              3, "metadata"),
@@ -417,6 +415,7 @@ class ParserContractTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout, "")
-            self.assertIn(f"Configuration error: line {line}: ", result.stderr)
+            where = "" if line is None else f"line {line}: "
+            self.assertIn(f"Configuration error: {where}", result.stderr)
             self.assertIn(cause, result.stderr)
             self.assertNotIn("Traceback", result.stderr)

@@ -354,3 +354,22 @@
 - 理由: 数字を含む色名は表示側で扱えない。Subjectの「単語」を、数字を含まない文字列と解釈する。
 - 旧判断との関係: [DEC-031](#dec-031)のメタデータ検証をモデル側で行う方針は維持し、`color`の許容範囲だけを狭める。
 - 承認根拠: 2026-11-01 JST、開発者による「strだけ。0もなし。数字がつく色は扱えない」という指示。commit/push・提出反映の承認は含まない。
+
+<a id="dec-034"></a>
+
+## DEC-034 — 状態・設定を持つ処理はクラスにし、共通処理は基底クラスへ置く
+
+- 結論・状態: Subjectの「completely object-oriented」を満たすため、状態や設定を持つ処理は必ずクラスにする。複数のクラスが使う共通処理は、重複している場合は共通基底クラスへ、単一の所有者しかない補助は所有クラスの`staticmethod`へ置く。対象範囲ではモジュール直下の関数を残さない。抽象基底クラス（ABC）は、複数の実装があり呼び出し側が差し替えを意識しない場合、または派生に必須の定義を強制したい場合にだけ導入する。対象は当面`parse/`と`common/`（廃止）に限る。`model/`は`MetadataModel`の導入と`parsed_map.py`の分割のみで、`_validate_zone_name`・`connection_key`・`movement_rules`、および`pathfinding/`・`simulation/`の関数は別途判断する（`ACCEPTED`、範囲限定）。責務・入出力は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: Subjectは非オブジェクト指向の設計を評価の停止条件とする。継承は見た目のためでなく、`Zone`・`Connection`で重複していたメタデータ処理を`MetadataModel`へ1回だけ書くために使う。`common/`は寄せ集めになりやすいため廃止した。
+- 構成: `MetadataModel`（`Zone`・`Connection`の抽象基底。`metadata_spec()`を抽象メソッドとし、未実装の派生・基底の直接生成を拒否する）、`MapReader`、`DeclarationParser`（メタデータ分割を非公開`staticmethod`で持つ）、`MapValidator`（検証中の状態を持つ）、`ScenarioBuilder`、`MapParseError.describe()`。`parsed_map.py`は`line_key.py`・`map_parse_error.py`・`parsed_map.py`へ分割した。
+- 旧判断との関係: [DEC-031](#dec-031)・[DEC-032](#dec-032)の責務分担と入力制約は維持し、関数だった実装形態だけをクラスへ変える。
+- 承認根拠: 2026-11-01 JST、開発者による「範囲はプロジェクト全体だが、今は`parse/`、`common/`に留める」「状態や設定を持つ処理は必ずクラスにする」を原則とする指示、および構成案への「そうだね、そうしようか、問題ない」という承認。commit/push・提出反映の承認は含まない。
+
+<a id="dec-035"></a>
+
+## DEC-035 — 欠落した宣言と空入力は行番号なしで報告する
+
+- 結論・状態: 必須宣言（`start_hub`・`end_hub`）の欠落と空入力は、実在しない行番号（EOF位置）を付けず、対象だけを示す。`MapParseError`は行番号を省略でき、その場合の`line_number`は`None`とする。`ParsedMap`と`MapReader`はEOF位置を持たない（`ACCEPTED`）。具体的な契約は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: 存在しない宣言は、どの物理行にも対応しない。EOF位置は慣習にすぎず、実在しない行を示すことは誤解を招く。EOF位置の計算と受け渡しが不要になり、コードも減る。重複・未宣言参照など行が特定できるエラーは、従来どおり`line N:`で報告する。
+- 旧判断との関係: [DEC-030](#dec-030)で採用した、欠落をEOF位置で報告する入力方針を置き換える。入力エラーの原因を示す方針と、エラー順序は維持する。Subjectは「line and cause」を求めるが、欠落宣言を含む入力は「unique start and unique end zone」の保証の範囲外と解釈する。
+- 承認根拠: 2026-11-01 JST、開発者による「正直に言って、全て読んでなかったのだからEOFの行を示しても意味がないとは思う」という指摘と、方針Bの選択、および「入力が空の時も一緒」という指示。commit/push・提出反映の承認は含まない。
