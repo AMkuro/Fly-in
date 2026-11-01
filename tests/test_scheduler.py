@@ -1,6 +1,7 @@
 """Space-time A* Planner and whole-plan Scheduler retries."""
 
 import unittest
+from collections.abc import Mapping
 from pathlib import Path
 
 from map_builder import scenario_from_text
@@ -11,7 +12,7 @@ from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
-from fly_in.pathfinding.static_distance import NoPathError, turns_to_end
+from fly_in.pathfinding.static_distance import NoPathError, StaticDistance
 from fly_in.simulation.simulation import simulate
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,9 +40,9 @@ connection: a-end
 """
 
 
-def planner_inputs(text: str) -> tuple[Reservation, dict[str, int]]:
+def planner_inputs(text: str) -> tuple[Reservation, Mapping[str, int]]:
     scenario = scenario_from_text(text)
-    return Reservation(scenario), turns_to_end(scenario)
+    return Reservation(scenario), StaticDistance(scenario).turns_to_end
 
 
 class PlannerTests(unittest.TestCase):
@@ -117,7 +118,7 @@ class SchedulerTests(unittest.TestCase):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
                 scenario = ScenarioBuilder().build(parsed)
                 plans = plan_all(
-                    scenario, turns_to_end(scenario), 10_000,
+                    scenario, StaticDistance(scenario).turns_to_end, 10_000,
                     SearchParams(),
                 )
                 self.assertIsNotNone(plans)

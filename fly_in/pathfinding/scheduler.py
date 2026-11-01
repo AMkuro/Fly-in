@@ -9,14 +9,14 @@ A failed attempt never replaces the best complete plan.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from fly_in.model.drone_state import DroneState
 from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.fallback import sequential_plans
 from fly_in.pathfinding.planner import SearchParams, plan_drone
 from fly_in.pathfinding.reservation import Reservation
-from fly_in.pathfinding.static_distance import static_path, turns_to_end
+from fly_in.pathfinding.static_distance import StaticDistance
 
 ATTEMPTS = 8
 
@@ -34,8 +34,9 @@ def schedule(
     Raises:
         NoPathError: If the end hub is unreachable.
     """
-    best = sequential_plans(scenario, static_path(scenario))
-    distance = turns_to_end(scenario)
+    static = StaticDistance(scenario)
+    best = sequential_plans(scenario, static.path())
+    distance = static.turns_to_end
     lower_bound = distance[scenario.start_name]
     for attempt in range(attempts):
         if makespan(best) == lower_bound:
@@ -49,7 +50,7 @@ def schedule(
 
 def plan_all(
     scenario: Scenario,
-    distance: dict[str, int],
+    distance: Mapping[str, int],
     deadline: int,
     params: SearchParams,
 ) -> list[list[DroneState]] | None:
