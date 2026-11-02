@@ -21,47 +21,55 @@ from fly_in.pathfinding.static_distance import StaticDistance
 ATTEMPTS = 8
 
 
-def makespan(plans: Sequence[Sequence[DroneState]]) -> int:
-    """Return the turn at which the last drone is delivered."""
-    return max(len(plan) for plan in plans) - 1
+class Scheduler:
+    """Find the best complete plan set for one scenario."""
 
+    def __init__(self, scenario: Scenario, attempts: int = ATTEMPTS) -> None:
+        """Bind the scenario and the number of whole-plan retries."""
+        self._scenario = scenario
+        self._attempts = attempts
 
-def schedule(
-    scenario: Scenario, attempts: int = ATTEMPTS
-) -> list[list[DroneState]]:
-    """Return the best complete plan set found, one plan per drone.
+    @staticmethod
+    def makespan(plans: Sequence[Sequence[DroneState]]) -> int:
+        """Return the turn at which the last drone is delivered."""
+        return max(len(plan) for plan in plans) - 1
 
-    Raises:
-        NoPathError: If the end hub is unreachable.
-    """
-    static = StaticDistance(scenario)
-    best = SequentialFallback(scenario, static.path()).plans()
-    distance = static.turns_to_end
-    lower_bound = distance[scenario.start_name]
-    for attempt in range(attempts):
-        if makespan(best) == lower_bound:
-            break
-        params = SearchParams(congestion_weight=attempt % 2, seed=attempt)
-        plans = plan_all(scenario, distance, makespan(best) - 1, params)
-        if plans is not None:
-            best = plans
-    return best
+    def schedule(self) -> list[list[DroneState]]:
+        """Return the best complete plan set found, one plan per drone.
 
+        Raises:
+            NoPathError: If the end hub is unreachable.
+        """
+        scenario = self._scenario
+        static = StaticDistance(scenario)
+        best = SequentialFallback(scenario, static.path()).plans()
+        distance = static.turns_to_end
+        lower_bound = distance[scenario.start_name]
+        for attempt in range(self._attempts):
+            if self.makespan(best) == lower_bound:
+                break
+            params = SearchParams(congestion_weight=attempt % 2, seed=attempt)
+            plans = self.plan_all(distance, self.makespan(best) - 1, params)
+            if plans is not None:
+                best = plans
+        return best
 
-def plan_all(
-    scenario: Scenario,
-    distance: Mapping[str, int],
-    deadline: int,
-    params: SearchParams,
-) -> list[list[DroneState]] | None:
-    """Plan every drone into a fresh Reservation; ``None`` if any fails.
+    def plan_all(
+        self,
+        distance: Mapping[str, int],
+        deadline: int,
+        params: SearchParams,
+    ) -> list[list[DroneState]] | None:
+        """Plan every drone into a fresh Reservation; None if any fails.
 
-    A plan the Reservation rejects means Planner and Reservation disagree;
-    the attempt is dropped like any other failure and the best plan stays.
-    """
-    reservation = Reservation(scenario)
-    for _ in range(scenario.nb_drones):
-        plan = SpaceTimePlanner(reservation, distance, params).plan(deadline)
-        if plan is None or reservation.try_add(plan) is not None:
-            return None
-    return [list(plan) for plan in reservation.plans]
+        A plan the Reservation rejects means Planner and Reservation
+        disagree; the attempt is dropped like any other failure and the
+        best plan stays.
+        """
+        reservation = Reservation(self._scenario)
+        planner = SpaceTimePlanner(reservation, distance, params)
+        for _ in range(self._scenario.nb_drones):
+            plan = planner.plan(deadline)
+            if plan is None or reservation.try_add(plan) is not None:
+                return None
+        return [list(plan) for plan in reservation.plans]

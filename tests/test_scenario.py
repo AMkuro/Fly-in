@@ -7,7 +7,7 @@ from map_builder import scenario_from_text
 from fly_in.model.drone_state import AtZone
 from fly_in.model.movement_rules import MovementRules
 from fly_in.model.scenario import Scenario
-from fly_in.pathfinding.scheduler import schedule
+from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.pathfinding.static_distance import StaticDistance
 from fly_in.simulation.simulation import simulate
 
@@ -27,7 +27,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertIs(backward.graph, forward.graph)
         self.assertEqual(StaticDistance(forward).path(), ["A", "B", "C"])
         self.assertEqual(StaticDistance(backward).path(), ["C", "B", "A"])
-        plans = schedule(backward, attempts=0)
+        plans = Scheduler(backward, attempts=0).schedule()
         self.assertEqual(len(plans), 3)
         self.assertEqual(simulate(backward, plans).makespan, 6)
 
