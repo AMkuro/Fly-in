@@ -1,17 +1,27 @@
 """Parsed input retained until whole-map validation."""
 
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import NamedTuple
 
 from fly_in.model.connection_model import Connection
-from fly_in.model.line_key import LineKey, ZoneLineKey
+from fly_in.model.line_key import LineKey
 from fly_in.model.zone_model import Zone
 
-ParsedLine: TypeAlias = tuple[int, str, str]
-ParsedDeclaration: TypeAlias = (
-    tuple[int, ZoneLineKey, Zone]
-    | tuple[int, Literal[LineKey.CONNECTION], Connection]
-)
+
+class ParsedLine(NamedTuple):
+    """One meaningful physical line split into its key and value text."""
+
+    number: int
+    key: str
+    value: str
+
+
+class ParsedDeclaration(NamedTuple):
+    """One validated zone or connection with its source line and kind."""
+
+    line: int
+    key: LineKey
+    value: Zone | Connection
 
 
 @dataclass(frozen=True)
