@@ -13,7 +13,7 @@
 
 | 領域・コード | 現在の責務と境界 |
 |---|---|
-| [CLI](../fly-in.py)、[FlyInApp](../fly_in/orchestra.py) | Parserの解析結果から`ScenarioBuilder().build()`で設定を確定する。ScenarioをScheduler・Simulationまたは静的Viewerへ渡す。移動行をstdoutへ出し、到達不能時はstderrへ`Error: No path from start to end.`を出して終了コード1を返す |
+| [CLI](../fly-in.py)（`Cli`クラス）、[FlyInApp](../fly_in/orchestra.py) | Parserの解析結果から`ScenarioBuilder().build()`で設定を確定する。ScenarioをScheduler・Simulationまたは静的Viewerへ渡す。移動行をstdoutへ出し、到達不能時はstderrへ`Error: No path from start to end.`を出して終了コード1を返す |
 | [Parser](../fly_in/parse/map_parser.py) | 構文と単一オブジェクトを解析し、宣言順・物理行番号を持つ`ParsedMap`を返す。全体検証と実行設定の構築は呼び出し側が`ScenarioBuilder`へ依頼する |
 | [Zone](../fly_in/model/zone_model.py)・[Connection](../fly_in/model/connection_model.py) | 出典行を持たないPydanticモデル。各モデルがメタデータの許可キーと属性への対応付け、整数字句・型変換・局所的な値の制約を検証する。Connectionの自己ループも拒否する。メタデータの対応付けと整数字句の検査は共通基底クラス[MetadataModel](../fly_in/model/metadata_model.py)に置き、抽象基底クラスとして各モデルに`metadata_spec()`（種別名・許可キーと属性の対応・整数属性）だけを実装させる |
 | [MapGraph](../fly_in/model/map_graph.py) | `from_models()`で検証済みZone・Connectionから索引と隣接関係を構築する。start/endの役割、機体数、宣言種別・行番号には依存しない。blockedもトポロジーに残す |
