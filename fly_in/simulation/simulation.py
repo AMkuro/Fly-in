@@ -48,83 +48,86 @@ class StateHistory:
             if old != new
         )
 
+    @staticmethod
+    def token(drone_id: int, state: DroneState) -> str:
+        """Format one move as ``D<ID>-<zone>`` or ``D<ID>-<from>-<to>``.
 
-def simulate(
-    scenario: Scenario, plans: Sequence[Sequence[DroneState]]
-) -> StateHistory:
-    """Validate one plan per drone and return the confirmed history.
+        The connection is written in travel order.
+        """
+        if isinstance(state, InTransit):
+            return f"D{drone_id}-{state.from_zone}-{state.to_zone}"
+        return f"D{drone_id}-{state.zone}"
 
-    ``plans[i]`` becomes drone ``i + 1``. A plan shorter than the
-    makespan is extended with its final ``AtZone(end)``.
-
-    Raises:
-        SimulationError: If a movement, capacity or delivery rule fails.
-    """
-    if len(plans) != scenario.nb_drones:
-        raise SimulationError(
-            f"expected {scenario.nb_drones} plans, got {len(plans)}"
-        )
-    rules = MovementRules(scenario)
-    for index, plan in enumerate(plans):
-        error = rules.plan_error(plan)
-        if error is not None:
-            raise SimulationError(f"D{index + 1}: {error}")
-    last = max(len(plan) for plan in plans)
-    padded = [
-        tuple(plan) + (plan[-1],) * (last - len(plan)) for plan in plans
-    ]
-    states = tuple(
-        tuple(plan[turn] for plan in padded) for turn in range(last)
-    )
-    for turn in range(last - 1):
-        _check_capacity(
-            scenario, rules, turn, states[turn], states[turn + 1]
-        )
-    return StateHistory(states)
-
-
-def _check_capacity(
-    scenario: Scenario,
-    rules: MovementRules,
-    turn: int,
-    before: TurnState,
-    after: TurnState,
-) -> None:
-    """Check zone capacity at ``S_(t+1)`` and connection use in turn ``t``."""
-    graph = scenario.graph
-    zones = Counter(rules.occupied_zone(state) for state in after)
-    for zone, count in zones.items():
-        if zone is not None and count > graph.zone(zone).max_drones:
-            raise SimulationError(
-                f"zone {zone} holds {count} drones at S_{turn + 1}"
+    def lines(self) -> list[str]:
+        """Return one space-separated output line per turn (Subject VII.5)."""
+        return [
+            " ".join(
+                self.token(drone_id, state)
+                for drone_id, state in self.moves(turn)
             )
-    links = Counter(rules.connection_used(old, new)
-                    for old, new in zip(before, after))
-    for key, count in links.items():
-        if key is None:
-            continue
-        capacity = graph.link_capacity(*key)
-        if count > capacity:
+            for turn in range(self.makespan)
+        ]
+
+
+class Simulator:
+    """Validate complete plan sets for one scenario into a StateHistory."""
+
+    def __init__(self, scenario: Scenario) -> None:
+        """Bind the scenario and its per-drone movement rules."""
+        self._scenario = scenario
+        self._rules = MovementRules(scenario)
+
+    def run(self, plans: Sequence[Sequence[DroneState]]) -> StateHistory:
+        """Validate one plan per drone and return the confirmed history.
+
+        ``plans[i]`` becomes drone ``i + 1``. A plan shorter than the
+        makespan is extended with its final ``AtZone(end)``.
+
+        Raises:
+            SimulationError: If a movement, capacity or delivery rule fails.
+        """
+        scenario = self._scenario
+        if len(plans) != scenario.nb_drones:
             raise SimulationError(
-                f"connection {key[0]}-{key[1]} used {count} times "
-                f"in turn {turn}"
+                f"expected {scenario.nb_drones} plans, got {len(plans)}"
             )
+        for index, plan in enumerate(plans):
+            error = self._rules.plan_error(plan)
+            if error is not None:
+                raise SimulationError(f"D{index + 1}: {error}")
+        last = max(len(plan) for plan in plans)
+        padded = [
+            tuple(plan) + (plan[-1],) * (last - len(plan)) for plan in plans
+        ]
+        states = tuple(
+            tuple(plan[turn] for plan in padded) for turn in range(last)
+        )
+        for turn in range(last - 1):
+            self._check_capacity(turn, states[turn], states[turn + 1])
+        return StateHistory(states)
 
-
-def movement_token(drone_id: int, state: DroneState) -> str:
-    """Format one move as ``D<ID>-<zone>`` or ``D<ID>-<from>-<to>``.
-
-    The connection is written in travel order.
-    """
-    if isinstance(state, InTransit):
-        return f"D{drone_id}-{state.from_zone}-{state.to_zone}"
-    return f"D{drone_id}-{state.zone}"
-
-
-def movement_lines(history: StateHistory) -> list[str]:
-    """Return one space-separated output line per turn (Subject VII.5)."""
-    return [
-        " ".join(movement_token(drone_id, state)
-                 for drone_id, state in history.moves(turn))
-        for turn in range(history.makespan)
-    ]
+    def _check_capacity(
+        self, turn: int, before: TurnState, after: TurnState
+    ) -> None:
+        """Check zone capacity at ``S_(t+1)`` and connection use in ``t``."""
+        graph = self._scenario.graph
+        rules = self._rules
+        zones = Counter(rules.occupied_zone(state) for state in after)
+        for zone, count in zones.items():
+            if zone is not None and count > graph.zone(zone).max_drones:
+                raise SimulationError(
+                    f"zone {zone} holds {count} drones at S_{turn + 1}"
+                )
+        links = Counter(
+            rules.connection_used(old, new)
+            for old, new in zip(before, after)
+        )
+        for key, count in links.items():
+            if key is None:
+                continue
+            capacity = graph.link_capacity(*key)
+            if count > capacity:
+                raise SimulationError(
+                    f"connection {key[0]}-{key[1]} used {count} times "
+                    f"in turn {turn}"
+                )

@@ -2,7 +2,7 @@ from fly_in.model.scenario import Scenario
 from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.scheduler import Scheduler
-from fly_in.simulation.simulation import movement_lines, simulate
+from fly_in.simulation.simulation import Simulator
 
 
 class FlyInApp:
@@ -53,7 +53,7 @@ class FlyInApp:
             SimulationError: If the chosen plans break a movement rule.
         """
         scheduled_plans = Scheduler(scenario).schedule()
-        for line in movement_lines(simulate(scenario, scheduled_plans)):
+        for line in Simulator(scenario).run(scheduled_plans).lines():
             print(line)
 
     def run(self, filepath: str, use_gui: bool = False) -> None:

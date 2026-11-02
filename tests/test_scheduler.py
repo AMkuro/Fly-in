@@ -13,7 +13,7 @@ from fly_in.pathfinding.planner import SearchParams, SpaceTimePlanner
 from fly_in.pathfinding.reservation import Reservation
 from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.pathfinding.static_distance import NoPathError, StaticDistance
-from fly_in.simulation.simulation import simulate
+from fly_in.simulation.simulation import Simulator
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -119,7 +119,7 @@ class SchedulerTests(unittest.TestCase):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
                 scenario = ScenarioBuilder().build(parsed)
                 plans = Scheduler(scenario).schedule()
-                history = simulate(scenario, plans)
+                history = Simulator(scenario).run(plans)
                 self.assertEqual(history.makespan, optimum)
 
     def test_reservation_accepts_every_planner_result(self) -> None:

@@ -14,7 +14,7 @@ from fly_in.pathfinding.static_distance import (
     NoPathError,
     StaticDistance,
 )
-from fly_in.simulation.simulation import simulate
+from fly_in.simulation.simulation import Simulator
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -83,7 +83,7 @@ class SequentialFallbackTests(unittest.TestCase):
         plans = SequentialFallback(
             scenario, StaticDistance(scenario).path()
         ).plans()
-        history = simulate(scenario, plans)
+        history = Simulator(scenario).run(plans)
         self.assertEqual(history.makespan, 3 * 2)
         self.assertEqual(plans[1][:3], [AtZone("start")] * 3)
 
