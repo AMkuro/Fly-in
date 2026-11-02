@@ -46,4 +46,4 @@ class MapReader:
             raise MapParseError(line_number, "key must not be empty.")
         if not value:
             raise MapParseError(line_number, "value must not be empty.")
-        return line_number, key_text, value
+        return ParsedLine(line_number, key_text, value)

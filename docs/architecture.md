@@ -51,7 +51,7 @@
 
 Parserパッケージの公開APIは`fly_in.parse`からimportする`FlyInMapParser`と`MapParseError`だけとする。`map_parser`の従来の同名importも維持する。内部モジュールの関数・型・定数はパッケージ内の連携と内部テスト用で、外部向けAPIに含めない。`__all__`は`parse/__init__.py`だけに置き、パッケージのワイルドカードimportの公開名を指定する。明示的な属性アクセスや内部モジュールからのimportを禁止する仕組みではない。
 
-Readerが返す`ParsedLine`は`(物理行番号, キー文字列, 値文字列)`。`ParsedDeclaration`は`(物理行番号, LineKey, Zone / Connection)`の型付きtupleの合併型で、宣言種別と値の型が対応する。各値は個別検証済みであり、`ParsedMap`はParserで検証済みの`nb_drones`、Zone・Connectionの宣言リスト`declarations`を持つ。宣言リストは元の順序と重複を保持する。初出行などの索引は全体検証の局所変数で、検証後に破棄する。
+Readerが返す`ParsedLine`は`(number, key, value)`の`NamedTuple`で、物理行番号・キー文字列・値文字列を持つ。`ParsedDeclaration`は`(line, key, value)`の`NamedTuple`で、物理行番号・`LineKey`・Zone / Connectionを持つ。宣言種別と値の型の対応は型では表さず、検証側が`isinstance`で確認する。各値は個別検証済みであり、`ParsedMap`はParserで検証済みの`nb_drones`、Zone・Connectionの宣言リスト`declarations`を持つ。宣言リストは元の順序と重複を保持する。初出行などの索引は全体検証の局所変数で、検証後に破棄する。
 
 `MapData`は廃止する。Zone・Connectionの全体検証済み設定と隣接索引は`MapGraph`にまとめ、Zone・Connectionの検証済みインスタンスをそのまま保持する。出典情報は`ParsedMap`にだけ置き、単体モデル・完成したMapGraph・Scenarioには残さない。Zone・Connectionの属性は`zone.zone_type`や`connection.max_link_capacity`の形を保ち、入力メタデータ辞書は生成時に属性へ展開する。
 

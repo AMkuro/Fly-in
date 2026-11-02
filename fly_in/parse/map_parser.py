@@ -48,9 +48,9 @@ class FlyInMapParser:
                 )
         if not numbered_lines:
             raise MapParseError(None, "input is empty; no declarations.")
-        if numbered_lines[0][1] != LineKey.NB_DRONES.value:
+        if numbered_lines[0].key != LineKey.NB_DRONES.value:
             raise MapParseError(
-                numbered_lines[0][0],
+                numbered_lines[0].number,
                 "first meaningful line must be 'nb_drones'.",
             )
         if len(counts) > 1:
@@ -72,11 +72,11 @@ class FlyInMapParser:
                 connection = Connection.model_validate(
                     self._declarations.parse_connection(line_number, value)
                 )
-                return line_number, key, connection
+                return ParsedDeclaration(line_number, key, connection)
             zone = Zone.model_validate(
                 self._declarations.parse_zone(line_number, value)
             )
-            return line_number, key, zone
+            return ParsedDeclaration(line_number, key, zone)
         except MapParseError:
             raise
         except ValueError as error:
