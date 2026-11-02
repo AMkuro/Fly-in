@@ -6,12 +6,11 @@ from fly_in.simulation.simulation import Simulator
 
 
 class FlyInApp:
-    def __init__(self) -> None:
-        """Initialize empty application state."""
-        self._scenario: Scenario | None = None
+    """Load a map, then print its movements or open the viewer."""
 
-    def _load_map(self, filepath: str) -> Scenario:
-        """Load and store map parsed data.
+    @staticmethod
+    def _load_map(filepath: str) -> Scenario:
+        """Load and validate a map into a scenario.
 
         Args:
             filepath: Path to the map file.
@@ -24,10 +23,7 @@ class FlyInApp:
             OSError: If the configuration file cannot be read.
             ValueError: If configuration parsing or validation fails.
         """
-        self._scenario = ScenarioBuilder().build(
-            FlyInMapParser().load(filepath)
-        )
-        return self._scenario
+        return ScenarioBuilder().build(FlyInMapParser().load(filepath))
 
     def _orchestra(self, scenario: Scenario, use_gui: bool) -> None:
         """Run the current application flow for the parsed map."""
