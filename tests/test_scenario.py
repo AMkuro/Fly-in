@@ -9,7 +9,7 @@ from fly_in.model.movement_rules import MovementRules
 from fly_in.model.scenario import Scenario
 from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.pathfinding.static_distance import StaticDistance
-from fly_in.simulation.simulation import simulate
+from fly_in.simulation.simulation import Simulator
 
 MAP = (
     "nb_drones: 2\nstart_hub: A 0 0\nhub: B 1 0\nend_hub: C 2 0\n"
@@ -29,7 +29,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(StaticDistance(backward).path(), ["C", "B", "A"])
         plans = Scheduler(backward, attempts=0).schedule()
         self.assertEqual(len(plans), 3)
-        self.assertEqual(simulate(backward, plans).makespan, 6)
+        self.assertEqual(Simulator(backward).run(plans).makespan, 6)
 
     def test_unlimited_capacity_follows_the_scenario(self) -> None:
         """Changing the start role changes which zone is capacity-exempt."""
