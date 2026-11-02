@@ -85,8 +85,8 @@ class Reservation:
         if error is not None:
             return error
         self._plans.append(candidate)
-        _merge(self._zone_occupancy, zone_delta)
-        _merge(self._connection_usage, connection_delta)
+        self._merge(self._zone_occupancy, zone_delta)
+        self._merge(self._connection_usage, connection_delta)
         return None
 
     def _deltas(
@@ -124,10 +124,10 @@ class Reservation:
                     )
         return None
 
-
-def _merge(
-    cache: dict[int, Counter[Key]], delta: dict[int, Counter[Key]]
-) -> None:
-    """Add ``delta`` into ``cache`` in place."""
-    for turn, counts in delta.items():
-        cache.setdefault(turn, Counter()).update(counts)
+    @staticmethod
+    def _merge(
+        cache: dict[int, Counter[Key]], delta: dict[int, Counter[Key]]
+    ) -> None:
+        """Add ``delta`` into ``cache`` in place."""
+        for turn, counts in delta.items():
+            cache.setdefault(turn, Counter()).update(counts)
