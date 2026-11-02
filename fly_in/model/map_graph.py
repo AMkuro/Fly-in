@@ -35,7 +35,7 @@ class MapGraph:
         }
 
         for connection in connections:
-            key = cls.connection_key(connection.a, connection.b)
+            key = Connection.key(connection.a, connection.b)
             connections_by_pair[key] = connection
             zone_adjacency[connection.a].append(connection.b)
             zone_adjacency[connection.b].append(connection.a)
@@ -52,11 +52,6 @@ class MapGraph:
             ),
         )
 
-    @staticmethod
-    def connection_key(a: str, b: str) -> tuple[str, str]:
-        """Return the canonical undirected key for two zone names."""
-        return Connection.key(a, b)
-
     def zone(self, zone_name: str) -> Zone:
         """Return a zone by name."""
         return self.zones[zone_name]
@@ -68,9 +63,9 @@ class MapGraph:
     def link_capacity(self, a: str, b: str) -> int:
         """Return the capacity of the existing connection between two zones."""
         return self._connections_by_pair[
-            self.connection_key(a, b)
+            Connection.key(a, b)
         ].max_link_capacity
 
     def connection_between(self, a: str, b: str) -> Connection | None:
         """Return the connection between two zones, if one exists."""
-        return self._connections_by_pair.get(self.connection_key(a, b))
+        return self._connections_by_pair.get(Connection.key(a, b))

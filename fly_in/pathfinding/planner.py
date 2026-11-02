@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.zone_model import ZoneType
-from fly_in.model.map_graph import MapGraph
+from fly_in.model.connection_model import Connection
 from fly_in.pathfinding.reservation import Reservation
 
 Node = tuple[DroneState, int]
@@ -133,7 +133,7 @@ class SpaceTimePlanner:
             result.append((state, 0, self._zone_crowd(state, turn + 1)))
         for neighbor in graph.neighbors_for(state.zone):
             turns = graph.zone(neighbor).entry_turns
-            key = MapGraph.connection_key(state.zone, neighbor)
+            key = Connection.key(state.zone, neighbor)
             link_used = reservation.connection_usage(turn, key)
             if turns is None or (
                 link_used >= reservation.connection_capacity(key)

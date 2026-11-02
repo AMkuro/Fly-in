@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.model.zone_model import ZoneType
-from fly_in.model.map_graph import MapGraph
+from fly_in.model.connection_model import Connection
 from fly_in.model.scenario import Scenario
 
 
@@ -105,7 +105,7 @@ class MovementRules:
         if isinstance(before, InTransit):
             return None
         if isinstance(after, InTransit):
-            return MapGraph.connection_key(after.from_zone, after.to_zone)
+            return Connection.key(after.from_zone, after.to_zone)
         if after.zone == before.zone:
             return None
-        return MapGraph.connection_key(before.zone, after.zone)
+        return Connection.key(before.zone, after.zone)
