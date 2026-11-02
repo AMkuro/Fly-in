@@ -28,9 +28,10 @@ class ScenarioBuilder:
                     end_name = value.name
             else:
                 connections.append(value)
-        # Preserve the existing start/end/regular-zone display order.
         zones = {
-            start_name: zones[start_name], end_name: zones[end_name], **zones
+            start_name: zones[start_name],
+            end_name: zones[end_name],
+            **zones,
         }
         graph = MapGraph.from_models(zones, connections)
         return Scenario(graph, start_name, end_name, parsed.nb_drones)
