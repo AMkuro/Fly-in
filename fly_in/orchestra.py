@@ -1,7 +1,7 @@
 from fly_in.model.scenario import Scenario
 from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
-from fly_in.pathfinding.scheduler import schedule
+from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.simulation.simulation import movement_lines, simulate
 
 
@@ -52,7 +52,7 @@ class FlyInApp:
             NoPathError: If the end hub is unreachable.
             SimulationError: If the chosen plans break a movement rule.
         """
-        scheduled_plans = schedule(scenario)
+        scheduled_plans = Scheduler(scenario).schedule()
         for line in movement_lines(simulate(scenario, scheduled_plans)):
             print(line)
 

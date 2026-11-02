@@ -11,7 +11,7 @@ from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from fly_in.pathfinding.planner import SearchParams, SpaceTimePlanner
 from fly_in.pathfinding.reservation import Reservation
-from fly_in.pathfinding.scheduler import makespan, plan_all, schedule
+from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.pathfinding.static_distance import NoPathError, StaticDistance
 from fly_in.simulation.simulation import simulate
 
@@ -105,19 +105,20 @@ class SchedulerTests(unittest.TestCase):
             "hub: wall 1 0 [zone=blocked]\nend_hub: end 2 0\n"
             "connection: start-wall\nconnection: wall-end\n")
         with self.assertRaises(NoPathError):
-            schedule(scenario)
+            Scheduler(scenario).schedule()
 
     def test_zero_attempts_keeps_sequential_fallback(self) -> None:
         scenario = scenario_from_text(LINEAR)
-        self.assertEqual(makespan(schedule(scenario, attempts=0)), 4)
-        self.assertEqual(makespan(schedule(scenario)), 3)
+        fallback = Scheduler(scenario, attempts=0).schedule()
+        self.assertEqual(Scheduler.makespan(fallback), 4)
+        self.assertEqual(Scheduler.makespan(Scheduler(scenario).schedule()), 3)
 
     def test_shipped_maps_reach_subject_optimum(self) -> None:
         for name, optimum in OPTIMUM.items():
             with self.subTest(map=name):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
                 scenario = ScenarioBuilder().build(parsed)
-                plans = schedule(scenario)
+                plans = Scheduler(scenario).schedule()
                 history = simulate(scenario, plans)
                 self.assertEqual(history.makespan, optimum)
 
@@ -127,15 +128,15 @@ class SchedulerTests(unittest.TestCase):
             with self.subTest(map=name):
                 parsed = FlyInMapParser().load(str(ROOT / "maps" / name))
                 scenario = ScenarioBuilder().build(parsed)
-                plans = plan_all(
-                    scenario, StaticDistance(scenario).turns_to_end, 10_000,
+                plans = Scheduler(scenario).plan_all(
+                    StaticDistance(scenario).turns_to_end, 10_000,
                     SearchParams(),
                 )
                 self.assertIsNotNone(plans)
 
     def test_scheduled_plans_are_one_per_drone(self) -> None:
         scenario = scenario_from_text(LINEAR)
-        plans: list[list[DroneState]] = schedule(scenario)
+        plans: list[list[DroneState]] = Scheduler(scenario).schedule()
         self.assertEqual(len(plans), 2)
 
 
