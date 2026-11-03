@@ -18,11 +18,11 @@
 | [Zone](../fly_in/model/zone_model.py)・[Connection](../fly_in/model/connection_model.py) | 出典行を持たないPydanticモデル。各モデルがメタデータの許可キーと属性への対応付け、整数字句・型変換・局所的な値の制約を検証する。Connectionの自己ループも拒否する。メタデータの対応付けと整数字句の検査は共通基底クラス[MetadataModel](../fly_in/model/metadata_model.py)に置き、抽象基底クラスとして各モデルに`metadata_spec()`（種別名・許可キーと属性の対応・整数属性）だけを実装させる |
 | [MapGraph](../fly_in/model/map_graph.py) | `from_models()`で検証済みZone・Connectionから索引と隣接関係を構築する。start/endの役割、機体数、宣言種別・行番号には依存しない。blockedもトポロジーに残す |
 | [Scenario](../fly_in/model/scenario.py) | Graphへの参照、`start_name`、`end_name`、`nb_drones`を持つ実行設定。Planner・Reservation・Simulation・GUI・開発用検証器が同じ設定を使う。Zone・Connection一覧はGraphにだけ保持する |
-| [DroneState](../fly_in/model/drone_state.py) | `AtZone(zone)`・`InTransit(from_zone, to_zone)`とその合併型`DroneState`。Zone名の文字列だけを持つ値オブジェクト。生成時にはどのマップでも成立しない値（Zone名規則違反、同一Zone間の`InTransit`）だけを拒否し、Zoneの存在・隣接性・遷移の合法性は検証しない。`frozen dataclass`という具体型は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案であり、承認済み契約ではない。Plan・Reservation・StateHistoryからはまだ利用されていない |
-| [移動規則](../fly_in/model/movement_rules.py)、[Reservation](../fly_in/pathfinding/reservation.py) | 移動規則は`MovementRules`（Scenarioを受け取るクラス、[DEC-036](decisions.md#dec-036)）で、1機分の遷移合法性（隣接・blocked・normal/restrictedの所要ターン・強制到着・到着後不動）と、容量計算に使う占有Zone・使用Connectionを返す。Reservationは確定Plan集合を正本とし、DEC-027の疎な時刻別キャッシュを持つ。`try_add`は検証と差分計算を終えてからPlanとキャッシュを一括で反映し、拒否時は何も変更しない（DEC-028）。API名・結果型（`str \| None`）・移動規則をSimulationと共有することは[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案。Planner・Schedulerからはまだ利用されていない |
-| [Simulation](../fly_in/simulation/simulation.py) | `Simulator`が全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`StateHistory.lines()`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。型・例外・関数配置は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
-| [静的最短経路](../fly_in/pathfinding/static_distance.py)、[逐次配送](../fly_in/pathfinding/fallback.py) | 他機体を無視した、endまでの最短ターン数を逆向きDijkstraで求める（進入コスト: restricted 2、normal/priority 1、blockedは進入不可）。startが到達不能なら`NoPathError`を送出する。最短経路では同着時にpriorityを優先する（DEC-020）。逐次配送（`SequentialFallback`）は、Drone `k`をターン`k×L`に出発させるDEC-017のフォールバック。Dijkstraの採用とpriorityの比較規則は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
-| [Planner](../fly_in/pathfinding/planner.py)、[Scheduler](../fly_in/pathfinding/scheduler.py) | Planner（`SpaceTimePlanner`）は`(状態, t)`上の時間付き予約A*（`f=t+静的残りターン`）で、Reservationを読むだけで1機分の最早到着Planを返す。同じ`f`の候補はpriority進入数→混雑度（重み付き）→seed付き乱数の順で選ぶ。Schedulerは逐次配送を初期の最良計画`U`とし、試行ごとに空のReservationへ全機体を期限`U-1`で計画して、成功すれば置き換える。試行上限8回、または下界（startの静的距離）に達したら終了する。評価・tie-break・分散の重み・試行回数・下界は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の**暫定値**で、T03の未決事項を決めたものではない |
+| [DroneState](../fly_in/model/drone_state.py) | `AtZone(zone)`・`InTransit(from_zone, to_zone)`とその合併型`DroneState`。Zone名の文字列だけを持つ`frozen dataclass`の値オブジェクト。生成時にはどのマップでも成立しない値（Zone名規則違反、同一Zone間の`InTransit`）だけを拒否し、Zoneの存在・隣接性・遷移の合法性は後段で検証する。Plan・Reservation・Planner・Simulation・StateHistoryで共通利用する |
+| [移動規則](../fly_in/model/movement_rules.py)、[Reservation](../fly_in/pathfinding/reservation.py) | 移動規則は`MovementRules`（Scenarioを受け取るクラス、[DEC-036](decisions.md#dec-036)）で、1機分の遷移合法性（隣接・blocked・normal/restrictedの所要ターン・強制到着・到着後不動）と、容量計算に使う占有Zone・使用Connectionを返す。Reservationは確定Plan集合を正本とし、DEC-027の疎な時刻別キャッシュを持つ。`try_add`は検証と差分計算を終えてからPlanとキャッシュを一括で反映し、拒否時は何も変更しない（DEC-028）。現行APIは`try_add(plan) -> str | None`で、PlannerはReservationを読み、Schedulerが候補Planを`try_add`へ渡して確定する。Simulationは同じ1機移動規則を共有するが、容量はReservationのキャッシュを使わず独立に再集計する |
+| [Simulation](../fly_in/simulation/simulation.py) | `Simulator`が全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`StateHistory.lines()`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。このStateHistoryがCLI出力および今後の可視化へ渡す検証済み履歴となる |
+| [静的最短経路](../fly_in/pathfinding/static_distance.py)、[逐次配送](../fly_in/pathfinding/fallback.py) | 他機体を無視した、endまでの最短ターン数を逆向きDijkstraで求める（進入コスト: restricted 2、normal/priority 1、blockedは進入不可）。startが到達不能なら`NoPathError`を送出する。最短経路では同着時にpriorityを優先する（DEC-020）。逐次配送（`SequentialFallback`）は、Drone `k`をターン`k×L`に出発させるDEC-017の合法なフォールバックであり、Schedulerの初期bestとして利用する |
+| [Planner](../fly_in/pathfinding/planner.py)、[Scheduler](../fly_in/pathfinding/scheduler.py) | Planner（`SpaceTimePlanner`）は`(状態, t)`上の時間付き予約A*（`f=t+静的残りターン`）で、Reservationを読むだけで1機分の最早到着Planを返す。同じ`f`の候補はpriority進入数→混雑度（重み付き）→seed付き乱数の順で選ぶ。Schedulerは逐次配送を初期の最良計画`U`とし、試行ごとに空のReservationへ全機体を期限`U-1`で計画して、成功すれば置き換える。試行上限8回、または下界（startの静的距離）に達したら終了する。これはT03の基準方式を具体化した現行実装であり、試行回数・混雑重み・seed等は必要に応じてT12A/T19で性能調整する（DEC-038） |
 | [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | Scenario内のGraphを静的描画し、Scenarioのstart/endの役割を表示に使う。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品は存在する。Viewerには未接続で、Snapshot生成処理もない。`Sequence[object]`を承認済みSnapshot型とは扱わない |
 | [開発用検証器](../tools/verify_subject.py) | Scenarioの入力事実を使ってCLI出力を独立に再生検証する。本体の探索・Scheduler・Simulationは呼ばない。Subject適合性の確定した根拠ではない |
@@ -74,7 +74,7 @@ Readerが返す`ParsedLine`は`(number, key, value)`の`NamedTuple`で、物理�
 ### 到着済みの状態
 
 本体の状態モデルでは、end到着後も`AtZone(goal)`として保持し、endを指すことから到着を判定する。到着後は移動させない。
-`AtZone`の型は[実装済みの表](#implemented)のDroneStateにあるが、格納方法・履歴との関係を実装した処理はまだない。
+`AtZone(end)`はReservation・Simulation・StateHistoryで実装済みで、到着済みDroneは内部状態として保持しつつ以後の移動出力から省かれる。
 採用理由は[DEC-001](decisions.md#dec-001)を参照する。
 
 <a id="t01-movement-contract"></a>
@@ -160,9 +160,9 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 
 <a id="t02-state-sharing-contract"></a>
 
-### T02 — 状態・共有契約（部分承認・未実装）
+### T02 — 状態・共有契約（完了）
 
-以下は[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)で**採用された設計方針**であり、具体的なPython型・メソッド・格納方式まで確定したものではない。[DEC-021](decisions.md#dec-021)〜[DEC-024](decisions.md#dec-024)に採用理由と根拠を記載する。T03で確定した探索戦略は[下記T03節](#t03-pathfinding-policy)を参照する。
+[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)で、状態・Plan・Reservation・StateHistory・Drone ID、およびPlanner / Scheduler / Reservation / Simulation / 表示層の責務境界を確定した。現行実装の具体型・APIは上のImplemented節を正本とし、採用理由は[DEC-021](decisions.md#dec-021)〜[DEC-028](decisions.md#dec-028)を参照する。表示層は検証済みStateHistoryを受け取り、経路探索・移動合法性・容量合法性を決めない。GUIか色付き端末表示かの最終選択は状態共有契約から切り離し、[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で実装時に判断する（[DEC-037](decisions.md#dec-037)）。T03で確定した探索戦略は[下記T03節](#t03-pathfinding-policy)を参照する。
 
 #### 状態と時刻
 
@@ -201,17 +201,18 @@ T03の[全体再計画方式C](decisions.md#dec-016)に従い、改善試行ご�
 
 Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採用しないなら、Subject v2.0の**色付き端末表示**の要件を満たす必要がある。
 
-#### T02の未決事項
+#### T02完了後に残す局所実装事項
 
-- `AtZone / InTransit`の**場所フィールド（Zone名`str`）は決定済み**。その具体的なPython型（dataclass等）、`DroneState`の型別名、`TurnState / Reservation / StateHistory / Move / Snapshot`のフィールド・所有者・読取APIは未決。Planは`list[DroneState]`相当（[DEC-025](decisions.md#dec-025)）。
-- Planのend到着後の状態は`AtZone(end)`として暗黙に継続し、容量キャッシュを無限延長しない方針とする。**検証と追加の責務はReservation自身に確定済み**（[DEC-028](decisions.md#dec-028)）。未決なのは検証・追加APIの引数と結果、**原子的更新と例外時の実装保証**、公開・再構築API、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
-- 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
+T02の完了条件は、各実装詳細を将来にわたり固定することではなく、各層が交換するデータと責務境界を確定することとする。現行の具体型・APIはImplemented節に記録し、必要な変更は該当する実装Issueで扱う。
 
+- `AtZone / InTransit`、Reservation、StateHistory等の具体的Python型・APIは現行実装を基準とし、型や内部APIの変更が必要ならT06/T07等の実装責務としてレビューする。
+- Reservationの正本と導出キャッシュの整合、Simulationによる独立検証、Plan順とDrone IDの対応、検証済みStateHistoryから表示層へ渡す境界はT02の確定契約として維持する。
+- Renderer固有のSnapshot型・再生API、およびGUIか色付き端末表示かの最終選択は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)へ移管する。これらはT02の完了ゲートにしない。
 <a id="t03-pathfinding-policy"></a>
 
-### T03 — 探索基準方式（方針承認・詳細未確定）
+### T03 — 探索基準方式（基準方式確定）
 
-**基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)、2026-10-29開発者承認）。これは**アルゴリズム方針の承認であり、探索・Simulation本体の実装完了や最終的なT03のCloseを意味しない**。
+**基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)）。全経路探索、全体再試行、逐次配送フォールバック、`U-1`期限、有限試行、静的距離下界、priority同着時優先までを初期基準方式として確定した。現行実装はこれらを具体化しており、詳細なtie-break重み・試行回数・より強い下界などは性能調整としてT12A/T19で再評価できる（[DEC-038](decisions.md#dec-038)）。
 
 - 時刻を含む探索と、他機体が将来利用するZone・Connectionの容量確認を組み合わせ、T01の合法性（同時移動、restrictedの強制到着、双方向共有容量、start/end例外）を満たす全体計画を目指す。
 - **初期Plannerは、実際のendまでの全経路候補を探索する**（[DEC-015](decisions.md#dec-015)）。時間窓・中間地点ゴールによる部分経路は初期基準方式に含めず、必要になった場合の拡張候補として残す。Schedulerは候補をReservationの検証・追加操作へ渡し、結果を受けて試行を調整する（[DEC-028](decisions.md#dec-028)）。
@@ -221,8 +222,8 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 - **停止規則は3つ**（[DEC-018](decisions.md#dec-018)）：(1) 現在の最良の合法計画のMakespanを`U`とすると、改善試行は全機体の完了を`U-1`ターン以内に制限する。(2) Schedulerの全体再計画には有限の試行予算を設ける。(3) Makespanの証明可能な下界`LB`に`U=LB`で到達したら早期終了する。試行上限の具体値、下界計算方法、探索資源制限は未決。試行に失敗しても保持済みの合法な最良計画を失わない。
 - **priority Zoneの選好は同着時優先**（[DEC-020](decisions.md#dec-020)）。合法な候補経路同士のend到着時刻が等しい場合にpriority経由を選好し、priorityだけを理由に到着が遅い経路を選ばない。移動コストはnormal同様1ターン。Schedulerの全体計画採否はMakespanを第一基準とする。priority経由の評価尺度・分散評価との同着時の詳細比較は未決。
 - 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
-- priority経由の同着候補間の詳細な比較規則、経路分散の評価式（Prim法による木の特徴量利用も未採用）、priority以外の同着候補選択規則、**採用済み停止規則を実現する具体的な予算値・下界算出方法**、フォールバック用静的経路の選択方式は**未承認**。予約表や状態の具体的なPython型、所有者、Planner/Scheduler/Simulation間の共有契約も一部のみ承認済みであり、[T02](https://github.com/AMkuro/Fly-in/issues/2)と相互に検討する。
-- [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。ただし、**T02・T03全体の完了を実装の一律の開始条件とはせず**、承認済み範囲の小単位から実装・テストを並行できる（[DEC-029](decisions.md#dec-029)）。新しい設計判断は引き続き人間の承認を要する。
+- 現行の具体実装では、同じ到着見込みの候補に対してpriority進入数、混雑度、seed付き乱数の順でtie-breakし、Schedulerは有限回の全体再試行を行う。これらの数値・詳細順位は基準方式を成立させる実装パラメータであり、T03の完了条件にはしない。性能上の必要があれば[T12A / #12](https://github.com/AMkuro/Fly-in/issues/12)または[T19 / #21](https://github.com/AMkuro/Fly-in/issues/21)で比較・調整する。
+- [T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)との共有契約照合と現行実装の読解レビューを終え、T03の基準方式選定は完了とする。逐次計画の全体最適性・完全性を保証しない点は引き続き明示する（[DEC-038](decisions.md#dec-038)）。
 
 <a id="incremental-implementation-policy"></a>
 
@@ -243,6 +244,6 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 - State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、所有者・読取API。Planのリスト表現は[DEC-025](decisions.md#dec-025)、`AtZone / InTransit`のZone名フィールドは[DEC-026](decisions.md#dec-026)で承認済み。
 - Reservationの**検証・追加APIの具体型、更新・例外時の原子性保証・公開API**、Plan/Stateの確定後の変更防止、Simulation検証失敗の実装契約。キャッシュ構造と差分生成は[DEC-027](decisions.md#dec-027)、検証・追加操作の所有者は[DEC-028](decisions.md#dec-028)で承認済み。
 - 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
-- RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
+- RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で扱う。T02の未決事項ではない。
 
 未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。
