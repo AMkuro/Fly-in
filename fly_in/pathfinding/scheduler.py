@@ -46,10 +46,11 @@ class Scheduler:
         distance = static.turns_to_end
         lower_bound = distance[scenario.start_name]
         for attempt in range(self._attempts):
-            if self.makespan(best) == lower_bound:
+            current_best = self.makespan(best)
+            if current_best == lower_bound:
                 break
             params = SearchParams(congestion_weight=attempt % 2, seed=attempt)
-            plans = self.plan_all(distance, self.makespan(best) - 1, params)
+            plans = self.plan_all(distance, current_best - 1, params)
             if plans is not None:
                 best = plans
         return best
