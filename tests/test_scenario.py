@@ -29,7 +29,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(StaticDistance(backward).path(), ["C", "B", "A"])
         plans = Scheduler(backward, attempts=0).schedule()
         self.assertEqual(len(plans), 3)
-        self.assertEqual(Simulator(backward).run(plans).makespan, 6)
+        self.assertEqual(Simulator(backward).run(plans).completion_turn, 6)
 
     def test_unlimited_capacity_follows_the_scenario(self) -> None:
         """Changing the start role changes which zone is capacity-exempt."""

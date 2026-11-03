@@ -110,8 +110,9 @@ class SchedulerTests(unittest.TestCase):
     def test_zero_attempts_keeps_sequential_fallback(self) -> None:
         scenario = scenario_from_text(LINEAR)
         fallback = Scheduler(scenario, attempts=0).schedule()
-        self.assertEqual(Scheduler.makespan(fallback), 4)
-        self.assertEqual(Scheduler.makespan(Scheduler(scenario).schedule()), 3)
+        self.assertEqual(Scheduler.plan_makespan(fallback), 4)
+        best = Scheduler(scenario).schedule()
+        self.assertEqual(Scheduler.plan_makespan(best), 3)
 
     def test_shipped_maps_reach_subject_optimum(self) -> None:
         for name, optimum in OPTIMUM.items():
@@ -120,7 +121,7 @@ class SchedulerTests(unittest.TestCase):
                 scenario = ScenarioBuilder().build(parsed)
                 plans = Scheduler(scenario).schedule()
                 history = Simulator(scenario).run(plans)
-                self.assertEqual(history.makespan, optimum)
+                self.assertEqual(history.completion_turn, optimum)
 
     def test_reservation_accepts_every_planner_result(self) -> None:
         # A rejection would silently drop attempts; make it visible here.
