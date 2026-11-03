@@ -4,7 +4,7 @@ import unittest
 from typing import Literal
 from unittest.mock import Mock, call
 
-from fly_in.model.map_data import Zone, ZoneType
+from fly_in.model.zone_model import Zone, ZoneType
 from fly_in.rendering.display_style import DisplayStyle
 try:
     import tkinter as tk
@@ -32,7 +32,7 @@ class MapViewDrawingTests(unittest.TestCase):
                 self.canvas.reset_mock()
                 self.canvas.create_oval.return_value = 42
                 zone = Zone(
-                    line_number=1, name="a", x=0, y=0, zone_type=zone_type,
+                    name="a", x=0, y=0, zone_type=zone_type,
                 )
                 item = self.view._create_zone_oval(
                     zone, CanvasPoint(100, 80), 30,

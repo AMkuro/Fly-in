@@ -312,3 +312,74 @@
 - 旧方針との関係: [DEC-014](#dec-014)などにあった「設計詳細を決めきってから本体実装に進む」という**開始順序のゲートのみ緩和**する。Fly-in Subject v2.0、T01の合法性、T02/T03で既に採用した設計、T02/T03の完了条件や最適性・完全性の非保証を撤回しない。
 - 根拠: 2026-10-30 JST、開発者が「もう実装を始めないとまずい」「ある程度AIに実装を委ねてみて、リバースエンジニアリングをしたい」と希望し、T02の未決事項を実装前必須と後回し可能に分ける提案および状態型から着手する案に「そうしようかな。今決まったことを書き込める？」と回答。**実装方針の記録依頼であって、このコメントのみで本体コードを更新したものではない。**
 - 現行の段階的実装方針: [architecture.md](architecture.md#incremental-implementation-policy)。議論・進捗は[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)、[T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)、最初の作業は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)。
+
+<a id="dec-030"></a>
+
+## DEC-030 — 解析済み宣言列によるParserの段階分離
+
+- 結論・状態: 行の読取、宣言種別ごとの個別解析、元の宣言順による全体検証、正式なMapDataの生成を分離する（`ACCEPTED`）。正式モデルは出典行を持たず、入力宣言の整合性を再検証しない。
+- 理由: 各段階が把握している位置と値を使って診断し、別レイアウトの中間マップ、モデル内部のレイアウト変換、失敗後の行番号逆引きをなくすため。検証済みZone・Connectionを再生成せず正式モデルへ渡す。
+- 入力方針: Subject v2.0 VI・VII.4に加え、今回指定されたM01〜M03・G01〜G02・N01を実装独自の制約として採用する。具体的な整数表記、空メタデータ、EOF、エラー順序の契約は[Parser pipeline](architecture.md#parser-pipeline)、同一座標禁止の利用者向け説明・理由・互換性上の制限は[README](../README.md#coordinate-uniqueness)を参照する。これらをSubjectの追加明文として扱わない。
+- 維持する境界: [DEC-010](#dec-010)のstart/end容量と[DEC-013](#dec-013)の到達不能報告を維持する。探索・移動・予約・スケジュールの判定をParserへ移さない。Inspectorは行番号表示だけを削除する。
+- 承認根拠: 2026-11-01 JSTの開発者による「Fly-in Parser / Validation リファクタリング実装」依頼。ファイル構成、検証済み宣言リスト、全体検証後のMapData生成、入力制約、出典削除、テスト・関連文書更新を明示指定。今回の作業は`feat/t06-planner-scheduler`上に限定され、commit/push・提出反映の承認は含まない。
+- 追記（2026-11-01 JST）: Subject v2.0に文字コードの指定がないことを本文で再確認。開発者の「デコードできない時は行番号じゃなくてファイル全体のエラーでいい」という指定に従い、行ごとのbytes解読を廃止。続けて文字コード要件をREADMEへ記載するよう明示指定。文字コードとデコード失敗の利用者向け説明は[README](../README.md#configuration-file-encoding)を正本とする。
+- 後続判断（2026-11-01 JST）: 全体検証の担当とMapDataによる保持は[DEC-031](#dec-031)で更新する。
+- 関連Issue: [T04 / #4](https://github.com/AMkuro/Fly-in/issues/4)。実装の責務は[architecture](architecture.md#parser-pipeline)を正本とし、本決定は人間による差分レビューの完了を意味しない。
+
+<a id="dec-031"></a>
+
+## DEC-031 — 単体モデルの検証とMapGraphによる設定確定
+
+- 結論・状態: Zone・Connectionをそれぞれのモデルファイルに分け、メタデータの検証・対応付けをモデル側へ移す。MapDataを廃止し、Parserの解析結果をMapGraphへ渡して全体検証とGraph化を完了する（`ACCEPTED`）。現行の責務・入出力・保持する情報は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: 単一オブジェクトの制約をPydanticモデルに集め、重複・参照先などの関係の検証はGraph構築時にまとめる。完成した設定とGraphで同じ情報を二重に保持しない。共通関数はどの層からも使える`common`パッケージに置く。Drone数の解析・検証はParserに残し、Graphには渡さない。
+- 旧判断との関係: [DEC-030](#dec-030)の段階分離と入力方針は維持し、全体検証の担当と最終的な保持先を本決定で更新する。フラットな属性構造、設定エラーの行番号・原因、Graph構築後の到達不能報告は維持する。
+- 承認根拠: 2026-11-01 JSTの開発者による、既存属性を保ってメタデータの検証・対応付けをモデルへ移す選択、`zone_model`・`connection_model`への分割指示、解析済み情報をMapGraphへ送り全体の整合性検証とGraph化を行う指定、および「map_dataを廃止して、ZoneとConnection用の汎用関数置き場を作成」という明示指示。続けて、Drone数はParserだけで解析・検証してGraphへ渡さないこと、整数表記などの共通関数を`common`のような場所へ置くことを指定。commit/push・提出反映の承認は含まない。
+
+- 後続判断（2026-11-01 JST）: 全体検証とGraph構造の分離、実行設定の保持先は[DEC-032](#dec-032)で更新する。
+
+<a id="dec-032"></a>
+
+## DEC-032 — 全体検証・Graph構造・実行設定の分離
+
+- 結論・状態: 全体検証を独立した関数へ移し、Graphは構造と索引に絞る。start/endと機体数はGraphへの参照を持つ小さなScenarioに集める（`ACCEPTED`）。責務・入出力は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: 接続構造から入力形式・診断情報・実行時の役割を切り離す。同じGraphを異なる実行条件で使え、設定の一覧を重複保持せずに済む。全体検証は検査項目ごとの補助関数に分け、宣言順を扱う本体を小さく保つ。
+- 旧判断との関係: [DEC-031](#dec-031)の単体モデル・メタデータ・共通関数の責務分担と入力制約を維持し、全体検証の担当と実行設定の保持先を更新する。start/endの容量例外、到着判定、入力エラーの位置・原因、到達不能報告は維持する。
+- 承認根拠: 2026-11-01 JST、開発者による全体検証・Graph・Scenarioを分ける提案への「そうしてみようか」という承認、および全体検証を一個の関数へ集めず分ける指示。commit/push・提出反映の承認は含まない。
+
+<a id="dec-033"></a>
+
+## DEC-033 — colorは数字を含まない単語に限る
+
+- 結論・状態: `color`は空でなく、空白と数字を含まない文字列に限る。違反は設定エラーとして行番号・原因を報告する（`ACCEPTED`）。文字列以外の値はPydanticが拒否する。
+- 理由: 数字を含む色名は表示側で扱えない。Subjectの「単語」を、数字を含まない文字列と解釈する。
+- 旧判断との関係: [DEC-031](#dec-031)のメタデータ検証をモデル側で行う方針は維持し、`color`の許容範囲だけを狭める。
+- 承認根拠: 2026-11-01 JST、開発者による「strだけ。0もなし。数字がつく色は扱えない」という指示。commit/push・提出反映の承認は含まない。
+
+<a id="dec-034"></a>
+
+## DEC-034 — 状態・設定を持つ処理はクラスにし、共通処理は基底クラスへ置く
+
+- 結論・状態: Subjectの「completely object-oriented」を満たすため、状態や設定を持つ処理は必ずクラスにする。複数のクラスが使う共通処理は、重複している場合は共通基底クラスへ、単一の所有者しかない補助は所有クラスの`staticmethod`へ置く。対象範囲ではモジュール直下の関数を残さない。抽象基底クラス（ABC）は、複数の実装があり呼び出し側が差し替えを意識しない場合、または派生に必須の定義を強制したい場合にだけ導入する。対象は当面`parse/`と`common/`（廃止）に限る。`model/`は`MetadataModel`の導入と`parsed_map.py`の分割のみで、`_validate_zone_name`・`connection_key`・`movement_rules`、および`pathfinding/`・`simulation/`の関数は別途判断する（`ACCEPTED`、範囲限定）。責務・入出力は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: Subjectは非オブジェクト指向の設計を評価の停止条件とする。継承は見た目のためでなく、`Zone`・`Connection`で重複していたメタデータ処理を`MetadataModel`へ1回だけ書くために使う。`common/`は寄せ集めになりやすいため廃止した。
+- 構成: `MetadataModel`（`Zone`・`Connection`の抽象基底。`metadata_spec()`を抽象メソッドとし、未実装の派生・基底の直接生成を拒否する）、`MapReader`、`DeclarationParser`（メタデータ分割を非公開`staticmethod`で持つ）、`MapValidator`（検証中の状態を持つ）、`ScenarioBuilder`、`MapParseError.describe()`。`parsed_map.py`は`line_key.py`・`map_parse_error.py`・`parsed_map.py`へ分割した。
+- 旧判断との関係: [DEC-031](#dec-031)・[DEC-032](#dec-032)の責務分担と入力制約は維持し、関数だった実装形態だけをクラスへ変える。対象範囲の拡大は[DEC-036](#dec-036)。
+- 承認根拠: 2026-11-01 JST、開発者による「範囲はプロジェクト全体だが、今は`parse/`、`common/`に留める」「状態や設定を持つ処理は必ずクラスにする」を原則とする指示、および構成案への「そうだね、そうしようか、問題ない」という承認。commit/push・提出反映の承認は含まない。
+
+<a id="dec-035"></a>
+
+## DEC-035 — 欠落した宣言と空入力は行番号なしで報告する
+
+- 結論・状態: 必須宣言（`start_hub`・`end_hub`）の欠落と空入力は、実在しない行番号（EOF位置）を付けず、対象だけを示す。`MapParseError`は行番号を省略でき、その場合の`line_number`は`None`とする。`ParsedMap`と`MapReader`はEOF位置を持たない（`ACCEPTED`）。具体的な契約は[architecture](architecture.md#parser-pipeline)を正本とする。
+- 理由: 存在しない宣言は、どの物理行にも対応しない。EOF位置は慣習にすぎず、実在しない行を示すことは誤解を招く。EOF位置の計算と受け渡しが不要になり、コードも減る。重複・未宣言参照など行が特定できるエラーは、従来どおり`line N:`で報告する。
+- 旧判断との関係: [DEC-030](#dec-030)で採用した、欠落をEOF位置で報告する入力方針を置き換える。入力エラーの原因を示す方針と、エラー順序は維持する。Subjectは「line and cause」を求めるが、欠落宣言を含む入力は「unique start and unique end zone」の保証の範囲外と解釈する。
+- 承認根拠: 2026-11-01 JST、開発者による「正直に言って、全て読んでなかったのだからEOFの行を示しても意味がないとは思う」という指摘と、方針Bの選択、および「入力が空の時も一緒」という指示。commit/push・提出反映の承認は含まない。
+
+<a id="dec-036"></a>
+
+## DEC-036 — 提出対象全体からモジュール直下の関数を除く
+
+- 結論・状態: [DEC-034](#dec-034)の「状態や設定を持つ処理は必ずクラスにする」を、提出対象（`fly-in.py`と`fly_in/`）全体へ広げる。`movement_rules`・`pathfinding/`・`simulation/`の関数、CLIの関数、`Zone`名の検証関数、進入ターン数の関数を、所有するクラスのメソッドへ移す。あわせて、位置で参照していたタプル型（`ParsedLine`・`ParsedDeclaration`）をデータクラスにし、`connection_key`を一本化する（`ACCEPTED`）。各クラスの責務・入出力は[architecture](architecture.md)を正本とする。
+- 範囲外: `DroneState`への抽象基底クラスの導入（`isinstance`分岐の置換）は、設計判断が大きいため含めない（`OPEN`）。`tools/`・`tests/`は提出対象外のため含めない。
+- 理由: Subjectは非オブジェクト指向の設計を評価の停止条件とする。DEC-034が「別途判断」としていた範囲を判断した。振る舞いは変えず、既存のテストを維持したまま形を変える。
+- 旧判断との関係: DEC-034の「対象は当面`parse/`と`common/`に限る」を拡大する。それ以外は維持する。
+- 承認根拠: 2026-11-02 JST、開発者による、OOP修正候補（#1〜#12）の提示後の「直していいけど、一個ずつcommitしていって」という指示。commit/push・提出反映の承認のうち、承認したのはcommitのみで、pushと提出反映は含まない。

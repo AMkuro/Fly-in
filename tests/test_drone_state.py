@@ -1,4 +1,4 @@
-"""Unit checks for the two drone physical states (T02 DEC-021/025/026)."""
+"""Unit checks for the two drone physical states."""
 
 import dataclasses
 import unittest
