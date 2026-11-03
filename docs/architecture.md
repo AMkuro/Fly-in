@@ -160,9 +160,9 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 
 <a id="t02-state-sharing-contract"></a>
 
-### T02 — 状態・共有契約（部分承認・未実装）
+### T02 — 状態・共有契約（完了）
 
-以下は[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)で**採用された設計方針**であり、具体的なPython型・メソッド・格納方式まで確定したものではない。[DEC-021](decisions.md#dec-021)〜[DEC-024](decisions.md#dec-024)に採用理由と根拠を記載する。T03で確定した探索戦略は[下記T03節](#t03-pathfinding-policy)を参照する。
+[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)で、状態・Plan・Reservation・StateHistory・Drone ID、およびPlanner / Scheduler / Reservation / Simulation / 表示層の責務境界を確定した。現行実装の具体型・APIは上のImplemented節を正本とし、採用理由は[DEC-021](decisions.md#dec-021)〜[DEC-028](decisions.md#dec-028)を参照する。表示層は検証済みStateHistoryを受け取り、経路探索・移動合法性・容量合法性を決めない。GUIか色付き端末表示かの最終選択は状態共有契約から切り離し、[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で実装時に判断する（[DEC-037](decisions.md#dec-037)）。T03で確定した探索戦略は[下記T03節](#t03-pathfinding-policy)を参照する。
 
 #### 状態と時刻
 
@@ -201,12 +201,13 @@ T03の[全体再計画方式C](decisions.md#dec-016)に従い、改善試行ご�
 
 Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採用しないなら、Subject v2.0の**色付き端末表示**の要件を満たす必要がある。
 
-#### T02の未決事項
+#### T02完了後に残す局所実装事項
 
-- `AtZone / InTransit`の**場所フィールド（Zone名`str`）は決定済み**。その具体的なPython型（dataclass等）、`DroneState`の型別名、`TurnState / Reservation / StateHistory / Move / Snapshot`のフィールド・所有者・読取APIは未決。Planは`list[DroneState]`相当（[DEC-025](decisions.md#dec-025)）。
-- Planのend到着後の状態は`AtZone(end)`として暗黙に継続し、容量キャッシュを無限延長しない方針とする。**検証と追加の責務はReservation自身に確定済み**（[DEC-028](decisions.md#dec-028)）。未決なのは検証・追加APIの引数と結果、**原子的更新と例外時の実装保証**、公開・再構築API、Simulationへの引渡し・内部エラー・失敗時のフォールバック切替。
-- 確定履歴の不変性の実装、履歴のメモリ負荷、表示用Snapshotの具体的な型・契約、可視化方式の最終選択。
+T02の完了条件は、各実装詳細を将来にわたり固定することではなく、各層が交換するデータと責務境界を確定することとする。現行の具体型・APIはImplemented節に記録し、必要な変更は該当する実装Issueで扱う。
 
+- `AtZone / InTransit`、Reservation、StateHistory等の具体的Python型・APIは現行実装を基準とし、型や内部APIの変更が必要ならT06/T07等の実装責務としてレビューする。
+- Reservationの正本と導出キャッシュの整合、Simulationによる独立検証、Plan順とDrone IDの対応、検証済みStateHistoryから表示層へ渡す境界はT02の確定契約として維持する。
+- Renderer固有のSnapshot型・再生API、およびGUIか色付き端末表示かの最終選択は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)へ移管する。これらはT02の完了ゲートにしない。
 <a id="t03-pathfinding-policy"></a>
 
 ### T03 — 探索基準方式（方針承認・詳細未確定）
@@ -243,6 +244,6 @@ Subject準拠の移動行とデバッグ情報は区別する。GUIを最終採�
 - State・Move・Reservation・StateHistory・Snapshotの具体的なPython型、所有者・読取API。Planのリスト表現は[DEC-025](decisions.md#dec-025)、`AtZone / InTransit`のZone名フィールドは[DEC-026](decisions.md#dec-026)で承認済み。
 - Reservationの**検証・追加APIの具体型、更新・例外時の原子性保証・公開API**、Plan/Stateの確定後の変更防止、Simulation検証失敗の実装契約。キャッシュ構造と差分生成は[DEC-027](decisions.md#dec-027)、検証・追加操作の所有者は[DEC-028](decisions.md#dec-028)で承認済み。
 - 予約付きA*の評価関数、経路分散・詳細tie-break、具体的探索予算・停止値と追加最適化（T03の未決事項）。
-- RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択。
+- RendererへのSnapshot受渡しの具体型と、GUIか色付き端末表示かの最終選択は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で扱う。T02の未決事項ではない。
 
 未承認案の検討・採否待ち・実装進捗は、[対応するGitHub Issues](https://github.com/AMkuro/Fly-in/issues)（特に[状態・共有契約の設計 / T02](https://github.com/AMkuro/Fly-in/issues/2)・[探索・割当て方式の選定 / T03](https://github.com/AMkuro/Fly-in/issues/3)）で扱う。過去の候補や未決事項は[引き継ぎ記録](../.agent/handoffs/2026-10-23-design-context.md)に履歴として残す。新たな判断が承認された場合に限り[決定索引](decisions.md)へ採否・根拠を記録する。
