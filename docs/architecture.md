@@ -210,9 +210,9 @@ T02の完了条件は、各実装詳細を将来にわたり固定すること�
 - Renderer固有のSnapshot型・再生API、およびGUIか色付き端末表示かの最終選択は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)へ移管する。これらはT02の完了ゲートにしない。
 <a id="t03-pathfinding-policy"></a>
 
-### T03 — 探索基準方式（方針承認・詳細未確定）
+### T03 — 探索基準方式（基準方式確定）
 
-**基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)、2026-10-29開発者承認）。これは**アルゴリズム方針の承認であり、探索・Simulation本体の実装完了や最終的なT03のCloseを意味しない**。
+**基準方式は、時間付き予約を考慮するA*（Cooperative A*系）**とする（[DEC-014](decisions.md#dec-014)）。全経路探索、全体再試行、逐次配送フォールバック、`U-1`期限、有限試行、静的距離下界、priority同着時優先までを初期基準方式として確定した。現行実装はこれらを具体化しており、詳細なtie-break重み・試行回数・より強い下界などは性能調整としてT12A/T19で再評価できる（[DEC-038](decisions.md#dec-038)）。
 
 - 時刻を含む探索と、他機体が将来利用するZone・Connectionの容量確認を組み合わせ、T01の合法性（同時移動、restrictedの強制到着、双方向共有容量、start/end例外）を満たす全体計画を目指す。
 - **初期Plannerは、実際のendまでの全経路候補を探索する**（[DEC-015](decisions.md#dec-015)）。時間窓・中間地点ゴールによる部分経路は初期基準方式に含めず、必要になった場合の拡張候補として残す。Schedulerは候補をReservationの検証・追加操作へ渡し、結果を受けて試行を調整する（[DEC-028](decisions.md#dec-028)）。
@@ -222,8 +222,8 @@ T02の完了条件は、各実装詳細を将来にわたり固定すること�
 - **停止規則は3つ**（[DEC-018](decisions.md#dec-018)）：(1) 現在の最良の合法計画のMakespanを`U`とすると、改善試行は全機体の完了を`U-1`ターン以内に制限する。(2) Schedulerの全体再計画には有限の試行予算を設ける。(3) Makespanの証明可能な下界`LB`に`U=LB`で到達したら早期終了する。試行上限の具体値、下界計算方法、探索資源制限は未決。試行に失敗しても保持済みの合法な最良計画を失わない。
 - **priority Zoneの選好は同着時優先**（[DEC-020](decisions.md#dec-020)）。合法な候補経路同士のend到着時刻が等しい場合にpriority経由を選好し、priorityだけを理由に到着が遅い経路を選ばない。移動コストはnormal同様1ターン。Schedulerの全体計画採否はMakespanを第一基準とする。priority経由の評価尺度・分散評価との同着時の詳細比較は未決。
 - 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
-- priority経由の同着候補間の詳細な比較規則、経路分散の評価式（Prim法による木の特徴量利用も未採用）、priority以外の同着候補選択規則、**採用済み停止規則を実現する具体的な予算値・下界算出方法**、フォールバック用静的経路の選択方式は**未承認**。予約表や状態の具体的なPython型、所有者、Planner/Scheduler/Simulation間の共有契約も一部のみ承認済みであり、[T02](https://github.com/AMkuro/Fly-in/issues/2)と相互に検討する。
-- [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)は、T02との照合と残る判断の承認を経て完了とする。ただし、**T02・T03全体の完了を実装の一律の開始条件とはせず**、承認済み範囲の小単位から実装・テストを並行できる（[DEC-029](decisions.md#dec-029)）。新しい設計判断は引き続き人間の承認を要する。
+- 現行の具体実装では、同じ到着見込みの候補に対してpriority進入数、混雑度、seed付き乱数の順でtie-breakし、Schedulerは有限回の全体再試行を行う。これらの数値・詳細順位は基準方式を成立させる実装パラメータであり、T03の完了条件にはしない。性能上の必要があれば[T12A / #12](https://github.com/AMkuro/Fly-in/issues/12)または[T19 / #21](https://github.com/AMkuro/Fly-in/issues/21)で比較・調整する。
+- [T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)との共有契約照合と現行実装の読解レビューを終え、T03の基準方式選定は完了とする。逐次計画の全体最適性・完全性を保証しない点は引き続き明示する（[DEC-038](decisions.md#dec-038)）。
 
 <a id="incremental-implementation-policy"></a>
 
