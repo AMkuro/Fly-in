@@ -1,115 +1,83 @@
-"""Parser for Fly-in map files."""
+"""Read map syntax and return individually validated declarations."""
 
-from __future__ import annotations
+from typing import Literal
 
-from pathlib import Path
-
-from fly_in.model.map_data import MapData
-from fly_in.parse.map_format_def import (
-    LineKey,
-    MODEL_METADATA_KEYS,
-    MapParseError,
-    ParsedLine,
-    RawConnection,
-    RawMap,
-    RawZone,
-    SINGLETON_LINE_KEYS,
-    ZONE_METADATA_KEY,
-    ZONE_TYPE_FIELD,
-)
-from fly_in.parse.raw_map_builder import build_raw_map
-from fly_in.parse.validation_adapter import convert_and_validate
-
-__all__ = [
-    "FlyInMapParser",
-    "LineKey",
-    "MapParseError",
-    "ParsedLine",
-    "RawMap",
-    "RawZone",
-    "RawConnection",
-    "SINGLETON_LINE_KEYS",
-    "ZONE_METADATA_KEY",
-    "ZONE_TYPE_FIELD",
-    "MODEL_METADATA_KEYS",
-]
+from fly_in.model.connection_model import Connection
+from fly_in.model.line_key import LineKey, ZoneLineKey
+from fly_in.model.map_parse_error import MapParseError
+from fly_in.model.parsed_map import ParsedDeclaration, ParsedLine, ParsedMap
+from fly_in.model.zone_model import Zone
+from fly_in.parse.declaration_parser import DeclarationParser
+from fly_in.parse.map_reader import MapReader
 
 
 class FlyInMapParser:
-    """Load, parse, and validate Fly-in map files."""
+    """Parse local objects for subsequent whole-map validation."""
 
-    def load(self, filepath: str | Path) -> MapData:
-        """Load a map file and return validated Pydantic data."""
-        raw_map = self._load_raw(filepath)
-        return convert_and_validate(raw_map)
+    def __init__(self) -> None:
+        """Create the parts this parser delegates to."""
+        self._reader = MapReader()
+        self._declarations = DeclarationParser()
 
-    def _load_raw(self, filepath: str | Path) -> RawMap:
-        """Load and convert a map file without semantic validation."""
-        clean_lines = self._read_lines(filepath)
-        parsed_lines = [
-            self._parse_line(line_number, line)
-            for line_number, line in clean_lines
-        ]
-        self._validate_unique_singleton_keys(parsed_lines)
-        return build_raw_map(parsed_lines)
+    def load(self, filepath: str) -> ParsedMap:
+        """Return local objects for subsequent MapGraph construction."""
+        return self._parse_declarations(self._reader.read(filepath))
 
-    @staticmethod
-    def _read_lines(filepath: str | Path) -> list[tuple[int, str]]:
-        """Read non-empty map lines after stripping comments."""
-        processed_lines: list[tuple[int, str]] = []
-        path = Path(filepath)
-        try:
-            with path.open(encoding="utf-8") as map_file:
-                for line_number, line in enumerate(map_file, 1):
-                    content = line.partition("#")[0].strip()
-                    if content:
-                        processed_lines.append((line_number, content))
-        except FileNotFoundError as error:
-            raise FileNotFoundError(f"Map file not found: {path}") from error
-        except OSError as error:
-            raise OSError(f"Could not read map file: {path}") from error
-        return processed_lines
-
-    @staticmethod
-    def _parse_line(line_number: int, line: str) -> ParsedLine:
-        """Parse one top-level ``key: value`` map line."""
-        key_value = line.split(":", 1)
-        if len(key_value) != 2:
+    def _parse_declarations(
+        self, numbered_lines: list[ParsedLine]
+    ) -> ParsedMap:
+        """Parse each numbered declaration while preserving source order."""
+        declarations: list[ParsedDeclaration] = []
+        counts: list[tuple[int, int]] = []
+        for line_number, key_text, value in numbered_lines:
+            try:
+                key = LineKey(key_text)
+            except ValueError as error:
+                valid_keys = ", ".join(item.value for item in LineKey)
+                raise MapParseError(
+                    line_number,
+                    f"unknown declaration {key_text!r}; "
+                    f"expected: {valid_keys}.",
+                ) from error
+            if key is LineKey.NB_DRONES:
+                number = self._declarations.parse_nb_drones(line_number, value)
+                counts.append((line_number, number))
+            else:
+                declarations.append(
+                    self._parse_declaration(line_number, key, value)
+                )
+        if not numbered_lines:
+            raise MapParseError(None, "input is empty; no declarations.")
+        if numbered_lines[0].key != LineKey.NB_DRONES.value:
             raise MapParseError(
-                line_number, "expected '<key>: <value>' syntax."
+                numbered_lines[0].number,
+                "first meaningful line must be 'nb_drones'.",
             )
+        if len(counts) > 1:
+            raise MapParseError(
+                counts[1][0],
+                f"duplicate nb_drones; first defined on line {counts[0][0]}.",
+            )
+        return ParsedMap(counts[0][1], declarations)
 
-        key_text, value = (part.strip() for part in key_value)
-        if not key_text:
-            raise MapParseError(line_number, "key must not be empty.")
-        if not value:
-            raise MapParseError(line_number, "value must not be empty.")
-
+    def _parse_declaration(
+        self,
+        line_number: int,
+        key: ZoneLineKey | Literal[LineKey.CONNECTION],
+        value: str,
+    ) -> ParsedDeclaration:
+        """Parse and validate the declaration selected by key."""
         try:
-            key = LineKey(key_text)
+            if key is LineKey.CONNECTION:
+                connection = Connection.model_validate(
+                    self._declarations.parse_connection(line_number, value)
+                )
+                return ParsedDeclaration(line_number, key, connection)
+            zone = Zone.model_validate(
+                self._declarations.parse_zone(line_number, value)
+            )
+            return ParsedDeclaration(line_number, key, zone)
+        except MapParseError:
+            raise
         except ValueError as error:
-            valid_keys = ", ".join(item.value for item in LineKey)
-            raise MapParseError(
-                line_number,
-                f"unknown key {key_text!r}; expected one of: {valid_keys}.",
-            ) from error
-        return (line_number, key, value)
-
-    @staticmethod
-    def _validate_unique_singleton_keys(
-        parsed_lines: list[ParsedLine],
-    ) -> None:
-        """Reject duplicate singleton keys before conversion."""
-        first_lines: dict[LineKey, int] = {}
-        for line_number, key, _ in parsed_lines:
-            if key not in SINGLETON_LINE_KEYS:
-                continue
-            previous_line = first_lines.get(key)
-            if previous_line is None:
-                first_lines[key] = line_number
-                continue
-            raise MapParseError(
-                line_number,
-                f"duplicate {key.value}; first defined on line "
-                f"{previous_line}.",
-            )
+            raise MapParseError(line_number, error) from error
