@@ -13,20 +13,59 @@
 
 | 領域・コード | 現在の責務と境界 |
 |---|---|
-| [CLI](../fly-in.py)、[FlyInApp](../fly_in/orchestra.py) | 引数を解析し、Parserを呼ぶ。`MapGraph`を生成するが後続処理には渡していない。通常実行はマップ概要、`--gui`は静的Viewerを開く。移動列は生成しない |
-| [Parser](../fly_in/parse/map_parser.py)、[RawMap生成](../fly_in/parse/raw_map_builder.py)、[検証アダプタ](../fly_in/parse/validation_adapter.py) | 読込・行解析・RawMap構築・Pydantic検証を分担する。`load()`の戻り値は`MapData`。入力構文の型は[map_format_def.py](../fly_in/parse/map_format_def.py)にある |
-| [MapData・Zone・Connection](../fly_in/model/map_data.py) | Pydanticで入力事実と構造上の制約を保持・検証する。Zoneは名前をキーとする辞書、Connectionはリスト。容量フィールドの存在は、ターンごとの容量計算式の承認を意味しない |
-| [MapGraph](../fly_in/model/map_graph.py) | `MapData`から隣接関係・Connection索引を構築する。Zone名は文字列、双方向Connectionの検索キーは名前の順序を正規化した組。blockedもトポロジーに残す。経路の合法性を計算する処理はまだない |
+| [CLI](../fly-in.py)（`Cli`クラス）、[FlyInApp](../fly_in/orchestra.py) | Parserの解析結果から`ScenarioBuilder().build()`で設定を確定する。ScenarioをScheduler・Simulationまたは静的Viewerへ渡す。移動行をstdoutへ出し、到達不能時はstderrへ`Error: No path from start to end.`を出して終了コード1を返す |
+| [Parser](../fly_in/parse/map_parser.py) | 構文と単一オブジェクトを解析し、宣言順・物理行番号を持つ`ParsedMap`を返す。全体検証と実行設定の構築は呼び出し側が`ScenarioBuilder`へ依頼する |
+| [Zone](../fly_in/model/zone_model.py)・[Connection](../fly_in/model/connection_model.py) | 出典行を持たないPydanticモデル。各モデルがメタデータの許可キーと属性への対応付け、整数字句・型変換・局所的な値の制約を検証する。Connectionの自己ループも拒否する。メタデータの対応付けと整数字句の検査は共通基底クラス[MetadataModel](../fly_in/model/metadata_model.py)に置き、抽象基底クラスとして各モデルに`metadata_spec()`（種別名・許可キーと属性の対応・整数属性）だけを実装させる |
+| [MapGraph](../fly_in/model/map_graph.py) | `from_models()`で検証済みZone・Connectionから索引と隣接関係を構築する。start/endの役割、機体数、宣言種別・行番号には依存しない。blockedもトポロジーに残す |
+| [Scenario](../fly_in/model/scenario.py) | Graphへの参照、`start_name`、`end_name`、`nb_drones`を持つ実行設定。Planner・Reservation・Simulation・GUI・開発用検証器が同じ設定を使う。Zone・Connection一覧はGraphにだけ保持する |
 | [DroneState](../fly_in/model/drone_state.py) | `AtZone(zone)`・`InTransit(from_zone, to_zone)`とその合併型`DroneState`。Zone名の文字列だけを持つ値オブジェクト。生成時にはどのマップでも成立しない値（Zone名規則違反、同一Zone間の`InTransit`）だけを拒否し、Zoneの存在・隣接性・遷移の合法性は検証しない。`frozen dataclass`という具体型は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案であり、承認済み契約ではない。Plan・Reservation・StateHistoryからはまだ利用されていない |
-| [移動規則](../fly_in/model/movement_rules.py)、[Reservation](../fly_in/pathfinding/reservation.py) | 移動規則は1機分の遷移合法性（隣接・blocked・normal/restrictedの所要ターン・強制到着・到着後不動）と、容量計算に使う占有Zone・使用Connectionを返す純粋関数。Reservationは確定Plan集合を正本とし、DEC-027の疎な時刻別キャッシュを持つ。`try_add`は検証と差分計算を終えてからPlanとキャッシュを一括で反映し、拒否時は何も変更しない（DEC-028）。API名・結果型（`str \| None`）・規則関数をSimulationと共有することは[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案。Planner・Schedulerからはまだ利用されていない |
-| [Simulation](../fly_in/simulation/simulation.py) | 全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`movement_lines`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。型・例外・関数配置は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
-| [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | `MapData`に基づく静的描画と検査表示。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する。探索・移動合法性は判定しない |
+| [移動規則](../fly_in/model/movement_rules.py)、[Reservation](../fly_in/pathfinding/reservation.py) | 移動規則は`MovementRules`（Scenarioを受け取るクラス、[DEC-036](decisions.md#dec-036)）で、1機分の遷移合法性（隣接・blocked・normal/restrictedの所要ターン・強制到着・到着後不動）と、容量計算に使う占有Zone・使用Connectionを返す。Reservationは確定Plan集合を正本とし、DEC-027の疎な時刻別キャッシュを持つ。`try_add`は検証と差分計算を終えてからPlanとキャッシュを一括で反映し、拒否時は何も変更しない（DEC-028）。API名・結果型（`str \| None`）・移動規則をSimulationと共有することは[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案。Planner・Schedulerからはまだ利用されていない |
+| [Simulation](../fly_in/simulation/simulation.py) | `Simulator`が全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`StateHistory.lines()`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。型・例外・関数配置は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
+| [静的最短経路](../fly_in/pathfinding/static_distance.py)、[逐次配送](../fly_in/pathfinding/fallback.py) | 他機体を無視した、endまでの最短ターン数を逆向きDijkstraで求める（進入コスト: restricted 2、normal/priority 1、blockedは進入不可）。startが到達不能なら`NoPathError`を送出する。最短経路では同着時にpriorityを優先する（DEC-020）。逐次配送（`SequentialFallback`）は、Drone `k`をターン`k×L`に出発させるDEC-017のフォールバック。Dijkstraの採用とpriorityの比較規則は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の実装案 |
+| [Planner](../fly_in/pathfinding/planner.py)、[Scheduler](../fly_in/pathfinding/scheduler.py) | Planner（`SpaceTimePlanner`）は`(状態, t)`上の時間付き予約A*（`f=t+静的残りターン`）で、Reservationを読むだけで1機分の最早到着Planを返す。同じ`f`の候補はpriority進入数→混雑度（重み付き）→seed付き乱数の順で選ぶ。Schedulerは逐次配送を初期の最良計画`U`とし、試行ごとに空のReservationへ全機体を期限`U-1`で計画して、成功すれば置き換える。試行上限8回、または下界（startの静的距離）に達したら終了する。評価・tie-break・分散の重み・試行回数・下界は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)でレビュー中の**暫定値**で、T03の未決事項を決めたものではない |
+| [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | Scenario内のGraphを静的描画し、Scenarioのstart/endの役割を表示に使う。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品は存在する。Viewerには未接続で、Snapshot生成処理もない。`Sequence[object]`を承認済みSnapshot型とは扱わない |
-| [開発用検証器](../tools/verify_subject.py) | Parserが返す入力事実を使ってCLI出力を再生検証する。本体のGraph・探索・Schedulerは呼ばない。Simulation本体でも、Subject適合性の確定した根拠でもない |
+| [開発用検証器](../tools/verify_subject.py) | Scenarioの入力事実を使ってCLI出力を独立に再生検証する。本体の探索・Scheduler・Simulationは呼ばない。Subject適合性の確定した根拠ではない |
 
-現時点の接続は`CLI → FlyInApp → Parser → MapData`であり、そこからGraph生成と静的表示へ進む。
-[simple_dijkstra.py](../fly_in/pathfinding/simple_dijkstra.py)は空で、[simulation](../fly_in/simulation/__init__.py)にも実装はない。ファイル名からDijkstraの採用を推定しない。
+現時点の接続は`CLI → FlyInApp → Parser → ParsedMap → 全体検証 → Graph構築 → Scenario →` 計画 `→ Simulation → 移動行`。`--gui`は同じScenarioを使う静的表示。
 現在のデータ形式は実装の観測結果であり、将来も固定する契約ではない（[DEC-003](decisions.md#dec-003)）。
+
+<a id="parser-pipeline"></a>
+
+## Parser pipeline
+
+現行の責務分担は[DEC-032](decisions.md#dec-032)、段階分離の当初の採用根拠は[DEC-030](decisions.md#dec-030)を参照する。入力仕様の正本はSubject v2.0のVI・VII.4とし、以下の実装独自の制約とは区別する。
+
+`Map file → MapReader → 単体情報の解析・検証 → ParsedMap → MapValidator → Graph構築・Scenarioの組立て`
+
+| ファイル | 責務・入力・出力 |
+|---|---|
+| [map_parser.py](../fly_in/parse/map_parser.py) | `FlyInMapParser.load(path)`が`MapReader`と`DeclarationParser`を使って読込と個別解析を管理する。キーを`LineKey`へ変換し、分割結果をZone・Connectionの`model_validate()`へ渡す。モデルのエラーに行番号を付ける。Drone数の正整数・先頭宣言・重複も検証し、全体検証前の`ParsedMap`を返す |
+| [map_reader.py](../fly_in/parse/map_reader.py) | `MapReader`がテキスト読込、コメント・空行、`key: value`の基本構文を扱い、キーは文字列のまま返す。宣言種別を判定しない。物理行番号付きの行を返す。改行はLF・CRLF・CRを扱う |
+| [declaration_parser.py](../fly_in/parse/declaration_parser.py) | `DeclarationParser`が要素数・記法・括弧・`key=value`・重複キーとDrone数を検証する。宣言ごとの許可キーは判定しない。Zone・Connectionの値とメタデータ辞書は生の値として返し、モデルの生成・検証は呼び出し側へ委ねる |
+| [map_validator.py](../fly_in/parse/map_validator.py) | `MapValidator(parsed).validate()`が宣言順に検査を進める。初出行の辞書を自身の状態として持ち、start/end宣言、Zone名・座標、Connectionの参照先・無向重複、必須宣言の確認を小さなメソッドへ分ける。検証成功まで辞書化せず、初出行とエラー順序を保つ |
+| [scenario_builder.py](../fly_in/parse/scenario_builder.py) | `ScenarioBuilder`が全体検証に成功してからGraphを構築し、start/endと機体数を持つScenarioを返す。設定ファイルの検査はこの処理の成功で完了する |
+| [line_key.py](../fly_in/model/line_key.py)・[parsed_map.py](../fly_in/model/parsed_map.py)・[map_parse_error.py](../fly_in/model/map_parse_error.py) | 宣言種別`LineKey`、行・解析済み宣言の型と`ParsedMap`、行番号付きの`MapParseError`（モデルのエラーを外部のメタデータ名で整形する）をそれぞれ定義する。メタデータの定義は各単体モデルに置く |
+
+### 一時情報と正式モデル
+
+Parserパッケージの公開APIは`fly_in.parse`からimportする`FlyInMapParser`と`MapParseError`だけとする。`map_parser`の従来の同名importも維持する。内部モジュールの関数・型・定数はパッケージ内の連携と内部テスト用で、外部向けAPIに含めない。`__all__`は`parse/__init__.py`だけに置き、パッケージのワイルドカードimportの公開名を指定する。明示的な属性アクセスや内部モジュールからのimportを禁止する仕組みではない。
+
+Readerが返す`ParsedLine`は`(number, key, value)`の`NamedTuple`で、物理行番号・キー文字列・値文字列を持つ。`ParsedDeclaration`は`(line, key, value)`の`NamedTuple`で、物理行番号・`LineKey`・Zone / Connectionを持つ。宣言種別と値の型の対応は型では表さず、検証側が`isinstance`で確認する。各値は個別検証済みであり、`ParsedMap`はParserで検証済みの`nb_drones`、Zone・Connectionの宣言リスト`declarations`を持つ。宣言リストは元の順序と重複を保持する。初出行などの索引は全体検証の局所変数で、検証後に破棄する。
+
+`MapData`は廃止する。Zone・Connectionの全体検証済み設定と隣接索引は`MapGraph`にまとめ、Zone・Connectionの検証済みインスタンスをそのまま保持する。出典情報は`ParsedMap`にだけ置き、単体モデル・完成したMapGraph・Scenarioには残さない。Zone・Connectionの属性は`zone.zone_type`や`connection.max_link_capacity`の形を保ち、入力メタデータ辞書は生成時に属性へ展開する。
+
+構築時には従来のZone列挙順（start、end、通常hubの宣言順）、Connectionの宣言順・名前の向き、メタデータの明示指定と省略の区別を保つ。Inspectorは出典行を表示しないが、他の表示は保持する。無向ConnectionのキーはConnection側の純粋関数を使い、MapGraphの問い合わせAPIは維持する。start/endとDrone数はGraphへ渡さず、Scenarioを通じて実行側へ渡す。
+
+### 入力方針とエラー
+
+- メタデータは省略と空ブロック`[]`を受理し、順序を問わない。重複キー、未知キー、Zone/Connection用キーの取り違え、自己ループは拒否する。
+- 整数字句は`[+-]?[0-9]+`の全文一致とする。符号・先頭ゼロ・負の座標を許容し、小数・指数・underscore・基数prefix・非ASCII数字は拒否する。Drone数・容量の正数条件は整数化後に検証する。
+- 座標は整数値で比較し、すべてのZoneで一意とする。この追加制約の理由とSubjectとの互換性の制限は[README](../README.md#coordinate-uniqueness)を正本とする。
+- 個別の構文・値エラーは現在行、重複は現在行と初出行、未宣言参照はConnection行で`MapParseError`にする。欠落（必須宣言の不足・空入力）は行番号を持たず、対象だけを示す。
+- 文字コードの要件とデコード失敗時の報告は[README](../README.md#configuration-file-encoding)を参照する。
+- 最初に検出したエラーで停止する。全行の個別解析がGraph構築前の全体検証に先行するため、後続行の局所エラーが前方の整合性エラーより先に報告される場合がある。
+- 到達可能性、移動・容量・予約・スケジュールの合法性は入力検証に含めない。到達不能の報告契約は[DEC-013](decisions.md#dec-013)を維持する。
 
 <a id="pending"></a>
 
@@ -109,12 +148,12 @@ $$
 
 - restrictedへの移動中は`D<ID>-<connection>`、Zone到着時は`D<ID>-<zone>`を出力する（Subject v2.0 VII.5）。Connection文字列は**移動方向順の`<出発元>-<到着先>`**を採用する。例えば`connection: R-A`であってもA→Rなら`D1-A-R`、到着ターンは`D1-R`。これは[DEC-013](decisions.md#dec-013)のプロジェクト判断であり、内部Connectionの同一性・ID方式を固定しない。
 - blockedは進入・通過不可（Subject明文）。実装上の「実効容量0」という表現は**未確定の実装選択**であり、入力の`max_drones`を0とすることはできない。
-- startからendへ到達不能なら、パースエラーとは区別して検出・明確に報告し、シミュレーション前に終了する。具体的な承認済み報告形式はstderrへの`Error: No path from start to end.`、終了コード`1`（[DEC-013](decisions.md#dec-013)）。動作の実装は未完了。
+- startからendへ到達不能なら、パースエラーとは区別して検出・明確に報告し、シミュレーション前に終了する。具体的な承認済み報告形式はstderrへの`Error: No path from start to end.`、終了コード`1`（[DEC-013](decisions.md#dec-013)）。
 
 ### start・endの容量
 
 start_hubとend_hubには容量制限を設けない。ここに書かれた`max_drones`は、正整数ならParserで受理して容量計算では無視し、0以下などの不正値はParserエラーにする（[DEC-010](decisions.md#dec-010)）。
-現行Parserは全Zoneに正整数を要求するため検証側は既に満たすが、無視する側は容量計算が未実装のため未実装。
+現行Parserは全Zoneに正整数を要求するため検証側は既に満たすが、無視する側も、ReservationとSimulationがstart/endを容量計算から除外することで実装済み。
 検証器が到着済み機体を`delivered`集合で管理していることも、本体の到着状態契約の実装を意味しない。
 監査・整合性判断は別タスクとする。
 
@@ -139,7 +178,7 @@ start_hubとend_hubには容量制限を設けない。ここに書かれた`max
 - **IDの割当て**：全機体のPlanが確定した後、**確定計画のリスト順に1始まりのDrone ID**を割り当てる（`plans[0]`がDrone 1）。Simulation・StateHistory・CLI・GUIはこの対応を共有し、移動途中で機体IDを交換しない。確定Reservationの中の`list`は後から変更せず、キャッシュ整合性を守る。変更防止・コピーの具体実装は未決（[DEC-025](decisions.md#dec-025)）。
 - **Reservationは計画済みDroneの時刻付き全経路を順次追加**する構造を採用する。未計画Droneはstartで待機するとみなすが、未計画機体の各時刻の`AtZone(start)`をReservationに保存しない。全機体数`K`と予約済み経路数`P`から未計画数`K-P`を得られる（1経路が1機体を表すことを前提とする）。`Unplanned`という物理状態・計画済み集合を追加する必要はない。
 - ReservationとStateHistoryは**状態要素を共通化**するが、**格納構造まで同一とはしない**。前者は全機体計画が未完成でも使う個別経路集合、後者は検証済み全機体の時系列状態。
-- Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする（[DEC-027](decisions.md#dec-027)）。定義容量は静的MapGraphのものを参照する。**時刻を第1キーとする疎な辞書**を使い、使用数0のキーは省略・照会時0として扱う。具体的な概念構造は`zone_occupancy[t][zone_name]`と`connection_usage[t][connection_key]`。ゾーン名は文字列、Connectionキーは`MapGraph.connection_key(a, b)`による無向正規化キーとする。
+- Reservationの時刻別**Zone占有・Connection利用量は、計画済み経路から導出したキャッシュ（案B）**とする（[DEC-027](decisions.md#dec-027)）。定義容量は静的MapGraphのものを参照する。**時刻を第1キーとする疎な辞書**を使い、使用数0のキーは省略・照会時0として扱う。具体的な概念構造は`zone_occupancy[t][zone_name]`と`connection_usage[t][connection_key]`。ゾーン名は文字列、Connectionキーは`Connection.key(a, b)`による無向正規化キーとする。
 - **時刻の意味は異なる**：`zone_occupancy[t][z]`は状態`S_t`でZone `z`にいる機体数、`connection_usage[t][e]`は`S_t → S_(t+1)`の移動ターン`t`における容量判定用使用量。start/endのZone占有は無制限のためキャッシュから省ける。
 - **候補PlanのZone差分**：各`plan[t]`が`AtZone(z)`なら、start/endを除いて`delta_zone[t][z] += 1`。`InTransit`ならZone使用差分はない。
 - **候補PlanのConnection差分**：連続する`plan[t] → plan[t+1]`を調べ、通常1ターン移動`AtZone(a) → AtZone(b)`、restrictedへの進入`AtZone(a) → InTransit(a,b)`の場合、それぞれ`delta_connection[t][connection_key(a,b)] += 1`。待機と合法なrestrictedの強制到着`InTransit(a,b) → AtZone(b)`は新たな利用として加算しない。合法な強制到着についてはT01式の`B_e(t)=F_e(t)`によって退出分が同一ターンに解放される。**この簡約を採用する場合も、restrictedの翌ターン強制到着を別途検証する**。

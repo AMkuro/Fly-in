@@ -2,7 +2,7 @@
 
 import unittest
 
-from map_builder import graph_from_text
+from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.pathfinding.reservation import Reservation
@@ -29,7 +29,7 @@ R_ROUTE: list[DroneState] = [
 
 class ReservationRuleTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.reservation = Reservation(graph_from_text(MAP))
+        self.reservation = Reservation(scenario_from_text(MAP))
 
     def assertRejected(self, plan: list[DroneState], reason: str) -> None:
         error = self.reservation.try_add(plan)
@@ -73,7 +73,7 @@ class ReservationRuleTests(unittest.TestCase):
 
 class ReservationCapacityTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.reservation = Reservation(graph_from_text(MAP))
+        self.reservation = Reservation(scenario_from_text(MAP))
 
     def test_cache_counts_zones_and_connections(self) -> None:
         self.assertIsNone(self.reservation.try_add(R_ROUTE))
@@ -118,9 +118,9 @@ class ReservationCapacityTests(unittest.TestCase):
         self.assertIsNone(error)
 
     def test_restricted_entry_while_connection_busy_is_rejected(self) -> None:
-        graph = graph_from_text(MAP.replace(
+        scenario = scenario_from_text(MAP.replace(
             "[zone=restricted]", "[zone=restricted max_drones=2]"))
-        reservation = Reservation(graph)
+        reservation = Reservation(scenario)
         self.assertIsNone(reservation.try_add(R_ROUTE))
         error = reservation.try_add(R_ROUTE)
         self.assertIn("connection r-start over capacity in turn 0",
@@ -134,13 +134,13 @@ class ReservationCapacityTests(unittest.TestCase):
         self.assertEqual(self.reservation.plans[0][1], AtZone("a"))
 
     def test_link_capacity_is_shared_by_both_directions(self) -> None:
-        graph = graph_from_text(
+        scenario = scenario_from_text(
             "nb_drones: 2\nstart_hub: start 0 0\n"
             "hub: a 1 0 [max_drones=2]\nhub: b 2 0 [max_drones=2]\n"
             "end_hub: end 3 0\nconnection: start-a\n"
             "connection: a-b\nconnection: b-end\nconnection: start-b\n"
         )
-        reservation = Reservation(graph)
+        reservation = Reservation(scenario)
         east: list[DroneState] = [
             AtZone("start"), AtZone("a"), AtZone("b"), AtZone("end")]
         west: list[DroneState] = [

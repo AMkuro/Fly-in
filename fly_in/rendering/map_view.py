@@ -1,6 +1,6 @@
 """Canvas-based static map view for Fly-in map data.
 
-This module is the place for drawing zones and connections from ``MapData``.
+This module is the place for drawing zones and connections from ``Scenario``.
 It should render facts supplied by the parser or future simulation snapshots;
 it must not decide movement validity, capacity validity, or routes.
 """
@@ -8,12 +8,14 @@ it must not decide movement validity, capacity validity, or routes.
 from __future__ import annotations
 
 import tkinter as tk
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from tkinter import ttk
 from typing import Literal
 
-from fly_in.model.map_data import Connection, MapData, Zone, ZoneType
+from fly_in.model.connection_model import Connection
+from fly_in.model.scenario import Scenario
+from fly_in.model.zone_model import Zone, ZoneType
 from fly_in.rendering.color_resolver import ColorResolver
 from fly_in.rendering.display_style import DisplayStyle
 from fly_in.rendering.viewport import MapBounds, Viewport
@@ -59,12 +61,12 @@ class MapView(ttk.Frame):
     def __init__(
         self,
         parent: tk.Misc,
-        map_data: MapData,
+        scenario: Scenario,
         on_hover: Callable[[InspectTarget | None], None],
     ) -> None:
         """Create the Canvas container for a parsed map."""
         super().__init__(parent)
-        self._map_data = map_data
+        self._scenario = scenario
         self._style = DisplayStyle()
         self._viewport = Viewport(margin=self._style.map_margin)
         self._on_hover = on_hover
@@ -95,9 +97,9 @@ class MapView(ttk.Frame):
         self._hovered_target = None
         self._highlighted_target = None
 
-        zones = list(self._map_data.zones.values())
+        zones = list(self._scenario.graph.zones.values())
         self._fit_viewport(zones)
-        self._draw_graph(zones, self._map_data.connections)
+        self._draw_graph(zones, self._scenario.graph.connections)
 
     def show_snapshot(self, snapshot: object) -> None:
         """Display a future simulation snapshot on top of the static map.
@@ -127,7 +129,7 @@ class MapView(ttk.Frame):
         )
 
     def _draw_graph(
-        self, zones: list[Zone], connections: list[Connection]
+        self, zones: list[Zone], connections: Sequence[Connection]
     ) -> None:
         """Draw the static map using one canvas-coordinate pass per zone."""
         zone_points = self._canvas_points_for(zones)
@@ -399,8 +401,8 @@ class MapView(ttk.Frame):
     def _is_start_or_end(self, zone: Zone) -> bool:
         """Return whether ``zone`` is one of the two special hubs."""
         return zone.name in {
-            self._map_data.start_hub_name,
-            self._map_data.end_hub_name,
+            self._scenario.start_name,
+            self._scenario.end_name,
         }
 
     @staticmethod
@@ -466,7 +468,7 @@ class MapView(ttk.Frame):
         """Apply or remove hover styling for one target."""
         item_ids = self._target_items.get(target, ())
         if target.kind == "zone":
-            zone = self._map_data.zones.get(target.identifier)
+            zone = self._scenario.graph.zones.get(target.identifier)
             outline = self._style.hover_outline_color
             width = self._style.highlighted_outline_width
             if not highlighted and zone is not None:

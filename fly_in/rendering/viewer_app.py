@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
-from fly_in.model.map_data import MapData
+from fly_in.model.scenario import Scenario
 from fly_in.rendering.inspector_panel import InspectorPanel
 from fly_in.rendering.map_view import InspectTarget, MapView
 
@@ -33,14 +33,14 @@ class ViewerApp(tk.Tk):
     MAP_MIN_WIDTH = 650
     INSPECTOR_MIN_WIDTH = 250
 
-    def __init__(self, map_data: MapData, inspect_mode: bool = False) -> None:
-        """Create the viewer for an already built ``MapData``.
+    def __init__(self, scenario: Scenario, inspect_mode: bool = False) -> None:
+        """Create the viewer for an already built ``Scenario``.
 
         ``inspect_mode`` is accepted for future playback inspection. Static map
         visualization can ignore it until snapshots and controls are added.
         """
         super().__init__()
-        self._map_data = map_data
+        self._scenario = scenario
         self._inspect_mode = inspect_mode
         self._map_view: MapView | None = None
         self._inspector: InspectorPanel | None = None
@@ -62,7 +62,7 @@ class ViewerApp(tk.Tk):
 
         self._inspector = InspectorPanel(self)
         self._map_view = MapView(
-            self, map_data=self._map_data, on_hover=self._on_hover
+            self, scenario=self._scenario, on_hover=self._on_hover
         )
         self._map_view.grid(row=0, column=0, sticky="nsew")
         self._inspector.grid(row=0, column=1, sticky="nsew")
@@ -78,7 +78,7 @@ class ViewerApp(tk.Tk):
         if target is None:
             self._inspector.clear_highlight_only()
             return
-        self._inspector.show_target(target, self._map_data)
+        self._inspector.show_target(target, self._scenario)
 
     def show_static_map(self) -> None:
         """Ask ``MapView`` to render the parsed map without snapshots."""

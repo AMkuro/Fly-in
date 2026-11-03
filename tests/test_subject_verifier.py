@@ -2,9 +2,12 @@
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
-from fly_in.parse.map_parser import FlyInMapParser
+from fly_in.model.map_graph import MapGraph
+from fly_in.parse import FlyInMapParser
+from fly_in.parse.scenario_builder import ScenarioBuilder
 from tools.verify_subject import MovementVerifier, SubjectVerifier
 
 
@@ -66,19 +69,40 @@ class MovementVerifierTests(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load a small graph with ordinary, restricted and blocked routes."""
-        self.data = FlyInMapParser().load(
-            Path("tests/fixtures/subject/mixed_zones.txt")
+        parsed = FlyInMapParser().load(
+            "tests/fixtures/subject/mixed_zones.txt"
         )
+        self.scenario = ScenarioBuilder().build(parsed)
+        self.data = self.scenario.graph
+        self.verifier = MovementVerifier(self.scenario)
+
+    def widen(
+        self, link_indexes: tuple[int, ...] = (), zone: str | None = None
+    ) -> MovementVerifier:
+        """Verify against a copied graph with capacity 2 where requested."""
+        graph = self.data
+        zones = dict(graph.zones)
+        if zone is not None:
+            zones[zone] = zones[zone].model_copy(update={"max_drones": 2})
+        connections = [
+            c.model_copy(update={"max_link_capacity": 2})
+            if i in link_indexes else c
+            for i, c in enumerate(graph.connections)
+        ]
+        scenario = replace(
+            self.scenario, graph=MapGraph.from_models(zones, connections)
+        )
+        return MovementVerifier(scenario)
 
     def test_departures_free_capacity_on_same_turn(self) -> None:
         """Allow another drone into a zone vacated during the same turn."""
         output = "D1-a\nD1-end D2-a\nD2-end\n"
-        self.assertEqual(MovementVerifier(self.data).verify(output, 3), 3)
+        self.assertEqual(self.verifier.verify(output, 3), 3)
 
     def test_restricted_transit(self) -> None:
         """Require a connection token followed by arrival on the next turn."""
         output = "D1-start-r\nD1-r\nD1-end D2-start-r\nD2-r\nD2-end\n"
-        self.assertEqual(MovementVerifier(self.data).verify(output, 5), 5)
+        self.assertEqual(self.verifier.verify(output, 5), 5)
 
     def test_invalid_streams_are_rejected(self) -> None:
         """Reject malformed, incomplete and illegal movement sequences."""
@@ -91,25 +115,23 @@ class MovementVerifierTests(unittest.TestCase):
             "D1-a\nD1-end D2-a\nD2-end\n\n",
         ):
             with self.subTest(output=output), self.assertRaises(ValueError):
-                MovementVerifier(self.data).verify(output, 12)
+                self.verifier.verify(output, 12)
 
     def test_zone_capacity_is_independent_of_link_capacity(self) -> None:
         """A wider connection must not allow excess zone occupancy."""
-        self.data.connections[0].max_link_capacity = 2
+        verifier = self.widen(link_indexes=(0,))
         with self.assertRaisesRegex(ValueError, "zone capacity"):
-            MovementVerifier(self.data).verify("D1-a D2-a\n", 12)
+            verifier.verify("D1-a D2-a\n", 12)
 
     def test_capacity_metadata_is_honored(self) -> None:
         """Allow concurrent traversal only when both capacities permit it."""
-        self.data.connections[0].max_link_capacity = 2
-        self.data.connections[1].max_link_capacity = 2
-        self.data.zones["a"].max_drones = 2
+        verifier = self.widen(link_indexes=(0, 1), zone="a")
         output = "D1-a D2-a\nD1-end D2-end\n"
-        self.assertEqual(MovementVerifier(self.data).verify(output, 2), 2)
+        self.assertEqual(verifier.verify(output, 2), 2)
 
     def test_turn_limit_and_ansi_colors(self) -> None:
         """Count turns, while allowing terminal color escape sequences."""
         output = "\x1b[32mD1-a\x1b[0m\nD1-end D2-a\nD2-end\n"
-        self.assertEqual(MovementVerifier(self.data).verify(output, 3), 3)
+        self.assertEqual(self.verifier.verify(output, 3), 3)
         with self.assertRaisesRegex(ValueError, "turn limit"):
-            MovementVerifier(self.data).verify(output, 2)
+            self.verifier.verify(output, 2)
