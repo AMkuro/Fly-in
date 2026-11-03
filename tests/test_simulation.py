@@ -37,7 +37,7 @@ class SimulationTests(unittest.TestCase):
     def test_linear_column_history_and_output(self) -> None:
         scenario = scenario_from_text(LINEAR)
         history = Simulator(scenario).run([column(0), column(1)])
-        self.assertEqual(history.makespan, 4)
+        self.assertEqual(history.completion_turn, 4)
         self.assertEqual(history.states[0],
                          (AtZone("start"), AtZone("start")))
         self.assertEqual(history.states[4], (AtZone("end"), AtZone("end")))

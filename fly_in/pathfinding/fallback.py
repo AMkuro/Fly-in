@@ -2,8 +2,8 @@
 
 Every drone waits at start (no capacity limit) until the previous one has
 reached the end (no capacity limit), so no two drones are ever between the
-hubs together. With path length ``L`` turns and ``K`` drones the makespan
-is ``K * L``: always legal, rarely fast.
+hubs together. With path length ``L`` turns and ``K`` drones the completion
+turn is ``K * L``: always legal, rarely fast.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Whole-plan retries around the reservation-aware Planner.
 
-1. The sequential fallback gives a legal plan with makespan ``U``.
+1. The sequential fallback gives a legal plan; its plan makespan is ``U``.
 2. Each attempt starts from an empty Reservation and plans every drone in
    turn with deadline ``U - 1``, so only strictly better plans succeed.
 3. Stop after ``attempts`` tries or when ``U`` reaches the lower bound.
@@ -30,7 +30,7 @@ class Scheduler:
         self._attempts = attempts
 
     @staticmethod
-    def makespan(plans: Sequence[Sequence[DroneState]]) -> int:
+    def plan_makespan(plans: Sequence[Sequence[DroneState]]) -> int:
         """Return the turn at which the last drone is delivered."""
         return max(len(plan) for plan in plans) - 1
 
@@ -46,7 +46,7 @@ class Scheduler:
         distance = static.turns_to_end
         lower_bound = distance[scenario.start_name]
         for attempt in range(self._attempts):
-            current_best = self.makespan(best)
+            current_best = self.plan_makespan(best)
             if current_best == lower_bound:
                 break
             params = SearchParams(congestion_weight=attempt % 2, seed=attempt)

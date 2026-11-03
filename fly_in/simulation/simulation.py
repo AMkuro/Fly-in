@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from fly_in.model.drone_state import DroneState, InTransit
-from fly_in.model.scenario import Scenario
 from fly_in.model.movement_rules import MovementRules
+from fly_in.model.scenario import Scenario
 
 TurnState: TypeAlias = tuple[DroneState, ...]
 """States of all drones at one time; index ``i`` is drone ``i + 1``."""
@@ -31,7 +31,7 @@ class StateHistory:
     states: tuple[TurnState, ...]
 
     @property
-    def makespan(self) -> int:
+    def completion_turn(self) -> int:
         """Return the number of turns ``T`` until every drone is delivered."""
         return len(self.states) - 1
 
@@ -65,7 +65,7 @@ class StateHistory:
                 self.token(drone_id, state)
                 for drone_id, state in self.moves(turn)
             )
-            for turn in range(self.makespan)
+            for turn in range(self.completion_turn)
         ]
 
 
@@ -81,7 +81,7 @@ class Simulator:
         """Validate one plan per drone and return the confirmed history.
 
         ``plans[i]`` becomes drone ``i + 1``. A plan shorter than the
-        makespan is extended with its final ``AtZone(end)``.
+        completion turn is extended with its final ``AtZone(end)``.
 
         Raises:
             SimulationError: If a movement, capacity or delivery rule fails.
@@ -119,8 +119,7 @@ class Simulator:
                     f"zone {zone} holds {count} drones at S_{turn + 1}"
                 )
         links = Counter(
-            rules.connection_used(old, new)
-            for old, new in zip(before, after)
+            rules.connection_used(old, new) for old, new in zip(before, after)
         )
         for key, count in links.items():
             if key is None:

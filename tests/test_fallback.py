@@ -78,13 +78,13 @@ class StaticPathTests(unittest.TestCase):
 
 
 class SequentialFallbackTests(unittest.TestCase):
-    def test_makespan_is_drones_times_path_length(self) -> None:
+    def test_completion_turn_is_drones_times_path_length(self) -> None:
         scenario = scenario_from_text(FORK)
         plans = SequentialFallback(
             scenario, StaticDistance(scenario).path()
         ).plans()
         history = Simulator(scenario).run(plans)
-        self.assertEqual(history.makespan, 3 * 2)
+        self.assertEqual(history.completion_turn, 3 * 2)
         self.assertEqual(plans[1][:3], [AtZone("start")] * 3)
 
 
