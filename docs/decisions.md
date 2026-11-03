@@ -243,6 +243,7 @@
 - 未決: 最終的な表示モードとRenderer/Snapshotの具体API。
 - 承認根拠: [T02部分承認コメント](https://github.com/AMkuro/Fly-in/issues/2#issuecomment-6511983880)。
 - 現行契約: [T02共有契約](architecture.md#t02-state-sharing-contract)。
+- 後続判断: 2026-11-03 JST、最終表示方式の選択は状態・共有契約の完了条件から外し、[DEC-037](#dec-037)により[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)へ移管した。検証済みStateHistoryを表示層が読む境界は維持する。
 
 <a id="dec-025"></a>
 
@@ -383,3 +384,15 @@
 - 理由: Subjectは非オブジェクト指向の設計を評価の停止条件とする。DEC-034が「別途判断」としていた範囲を判断した。振る舞いは変えず、既存のテストを維持したまま形を変える。
 - 旧判断との関係: DEC-034の「対象は当面`parse/`と`common/`に限る」を拡大する。それ以外は維持する。
 - 承認根拠: 2026-11-02 JST、開発者による、OOP修正候補（#1〜#12）の提示後の「直していいけど、一個ずつcommitしていって」という指示。commit/push・提出反映の承認のうち、承認したのはcommitのみで、pushと提出反映は含まない。
+
+<a id="dec-037"></a>
+
+## DEC-037 — 表示方式の最終選択をT11へ移管し、T02を完了する
+
+- 結論・状態: 状態・共有契約として必要な境界はT02で確定したため、[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)を完了とする（`ACCEPTED`）。GUIか色付き端末表示かの最終選択、およびRenderer固有のSnapshot・再生APIは、可視化を実装する[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で局所的に判断する。
+- T02で維持する契約: `AtZone / InTransit`を用いた状態表現、PlanとReservationの正本、Plan順とDrone IDの対応、Reservationによる候補Planの合法性・容量検証と原子的追加、Simulationによる完成計画の独立検証、検証済みStateHistoryから表示層へ渡す責務境界。
+- 表示層の境界: Rendererは検証済みStateHistoryを読み取り、経路探索・移動合法性・容量合法性を決めない。表示方式を変更してもPlanner / Reservation / Simulationの契約を変更する必要はない。
+- 理由: GUIか色付き端末表示かは、既存GUI部品・実装負荷・Subject要件を確認できる実装段階で決められる。これをT02の完了ゲートにすると、既に確定した状態共有・責務分離とは独立なUI判断が上流設計を不必要にブロックする。
+- 旧判断との関係: [DEC-024](#dec-024)の「検証済みStateHistoryを表示する」「GUI固有の問題でSimulationを停滞させない」は維持する。変更するのは、最終表示方式の採用判断をT02ではなくT11が所有する点だけ。
+- 承認根拠: 2026-11-03 JST、開発者が「T02は実装時の局所判断としてT11で決めればいい。T11に追記して閉じてよい」と明示し、続けてarchitecture/decisionsへの反映を指示した。
+- 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。表示方式の実装・採用は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)。
