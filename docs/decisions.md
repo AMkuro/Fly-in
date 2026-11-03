@@ -313,6 +313,7 @@
 - 旧方針との関係: [DEC-014](#dec-014)などにあった「設計詳細を決めきってから本体実装に進む」という**開始順序のゲートのみ緩和**する。Fly-in Subject v2.0、T01の合法性、T02/T03で既に採用した設計、T02/T03の完了条件や最適性・完全性の非保証を撤回しない。
 - 根拠: 2026-10-30 JST、開発者が「もう実装を始めないとまずい」「ある程度AIに実装を委ねてみて、リバースエンジニアリングをしたい」と希望し、T02の未決事項を実装前必須と後回し可能に分ける提案および状態型から着手する案に「そうしようかな。今決まったことを書き込める？」と回答。**実装方針の記録依頼であって、このコメントのみで本体コードを更新したものではない。**
 - 現行の段階的実装方針: [architecture.md](architecture.md#incremental-implementation-policy)。議論・進捗は[T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)、[T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)、最初の作業は[T06 / #7](https://github.com/AMkuro/Fly-in/issues/7)。
+- DEC-029の後続状況: 2026-11-03 JSTにT02は[DEC-037](#dec-037)で完了し、T03は現行実装の読解・共有契約照合を経て[DEC-038](#dec-038)で基準方式選定を完了した。段階的実装・人間レビューの原則自体は維持する。
 
 <a id="dec-030"></a>
 
@@ -396,3 +397,16 @@
 - 旧判断との関係: [DEC-024](#dec-024)の「検証済みStateHistoryを表示する」「GUI固有の問題でSimulationを停滞させない」は維持する。変更するのは、最終表示方式の採用判断をT02ではなくT11が所有する点だけ。
 - 承認根拠: 2026-11-03 JST、開発者が「T02は実装時の局所判断としてT11で決めればいい。T11に追記して閉じてよい」と明示し、続けてarchitecture/decisionsへの反映を指示した。
 - 現行契約: [T02状態・共有契約](architecture.md#t02-state-sharing-contract)。表示方式の実装・採用は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)。
+
+<a id="dec-038"></a>
+
+## DEC-038 — T03の基準探索方式を完了し、詳細チューニングを性能評価へ分離する
+
+- 結論・状態: [T03 / #3](https://github.com/AMkuro/Fly-in/issues/3)で選定した時間付き予約A*（Cooperative A*系）を、現行Fly-inの基準探索方式として完了扱いとする（`ACCEPTED`）。T02の共有契約と現行Planner/Scheduler/Reservation/Simulation実装を照合し、方式の主要不変条件・失敗条件・非保証をコード上でも確認した。
+- 基準方式に含むもの: endまでの時刻付き全経路探索、確定Reservationを読む1機単位A*、全体計画の初期状態からの再試行、逐次配送フォールバック、現在の最良Makespan `U` に対する `U-1` 改善期限、有限試行、静的start→end最短時間を証明可能な下界として用いる早期終了、priority Zoneの同着時優先、完成計画のSimulationによる独立検証。
+- 現行実装の多様化: 同じ到着見込みの候補ではpriority進入数を優先し、必要に応じて混雑度とseed付き乱数でtie-breakを変える。これは探索可能なspace-time graphそのものを変更するのではなく、同順位候補の展開・確定順を変え、先行DroneのReservationを通して後続Droneの実効探索空間を変えるheuristic restartである。
+- 非保証: 逐次計画なので、合法なjoint solutionが存在しても特定の先行予約によって改善試行が失敗し得る。一般のMakespan最適性・multi-agent探索の完全性は保証しない。`plan_all(deadline) == None`を静的到達不能の証明として扱わない。
+- T03の完了ゲートから外すもの: `ATTEMPTS`の具体値、混雑重み、seed生成、priority同着候補間の細かな得点、より強い下界、Prim/MST等の追加特徴量、局所予約取消しや部分経路探索などの追加最適化。これらは基準方式の選定ではなく、必要なら[T12A / #12](https://github.com/AMkuro/Fly-in/issues/12)または[T19 / #21](https://github.com/AMkuro/Fly-in/issues/21)で比較・採否を判断する。
+- 理由: アルゴリズムの骨格と責務境界は既に確定・実装され、残っている項目は性能・探索多様性の調整である。具体パラメータまでT03の完了条件にすると、実測によって変更すべき局所調整が上流の方式選定を不必要にブロックする。
+- 承認根拠: 2026-11-03 JST、開発者がPlanner/Scheduler/Reservation/Simulationを実行順に読解し、探索多様性・混雑tie-break・逐次計画の限界を確認したうえで、T03はアルゴリズムの核心をまとめて扱ったことが妥当との認識を示し、続けて「他の閉じれるIssueも閉じて」と指示した。具体的性能最適化は後続Issueへ分離する。
+- 現行契約: [T03探索基準方式](architecture.md#t03-pathfinding-policy)。
