@@ -6,16 +6,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from map_builder import graph_from_text
+from map_builder import scenario_from_text
 
 from fly_in.model.drone_state import AtZone, InTransit
-from fly_in.pathfinding.fallback import path_states, sequential_plans
-from fly_in.pathfinding.simple_dijkstra import (
+from fly_in.pathfinding.fallback import SequentialFallback
+from fly_in.pathfinding.static_distance import (
     NoPathError,
-    static_path,
-    turns_to_end,
+    StaticDistance,
 )
-from fly_in.simulation.simulation import simulate
+from fly_in.simulation.simulation import Simulator
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -45,35 +44,46 @@ connection: wall-end
 
 class StaticPathTests(unittest.TestCase):
     def test_distances_use_entry_cost(self) -> None:
-        distance = turns_to_end(graph_from_text(FORK))
+        distance = StaticDistance(scenario_from_text(FORK)).turns_to_end
         self.assertEqual(distance["start"], 2)
         self.assertEqual(distance["r"], 1)
         self.assertEqual(distance["end"], 0)
 
     def test_priority_wins_equal_arrival(self) -> None:
-        self.assertEqual(static_path(graph_from_text(FORK)),
+        self.assertEqual(StaticDistance(scenario_from_text(FORK)).path(),
                          ["start", "p", "end"])
 
+    def test_equal_arrival_without_priority_takes_larger_name(self) -> None:
+        scenario = scenario_from_text(
+            "nb_drones: 1\nstart_hub: start 0 0\n"
+            "hub: a 1 0\nhub: b 1 1\nend_hub: end 2 0\n"
+            "connection: start-a\nconnection: start-b\n"
+            "connection: a-end\nconnection: b-end\n")
+        path = StaticDistance(scenario).path()
+        self.assertEqual(path, ["start", "b", "end"])
+
     def test_restricted_route_when_it_is_the_only_one(self) -> None:
-        graph = graph_from_text(
+        scenario = scenario_from_text(
             "nb_drones: 1\nstart_hub: start 0 0\n"
             "hub: r 1 0 [zone=restricted]\nend_hub: end 2 0\n"
             "connection: start-r\nconnection: r-end\n")
-        path = static_path(graph)
-        self.assertEqual(path_states(graph, path), [
+        path = StaticDistance(scenario).path()
+        self.assertEqual(SequentialFallback(scenario, path).route(), [
             AtZone("start"), InTransit("start", "r"), AtZone("r"),
             AtZone("end")])
 
     def test_blocked_zone_makes_end_unreachable(self) -> None:
         with self.assertRaisesRegex(NoPathError, "No path from start"):
-            static_path(graph_from_text(BLOCKED))
+            StaticDistance(scenario_from_text(BLOCKED)).path()
 
 
 class SequentialFallbackTests(unittest.TestCase):
     def test_makespan_is_drones_times_path_length(self) -> None:
-        graph = graph_from_text(FORK)
-        plans = sequential_plans(graph, static_path(graph))
-        history = simulate(graph, plans)
+        scenario = scenario_from_text(FORK)
+        plans = SequentialFallback(
+            scenario, StaticDistance(scenario).path()
+        ).plans()
+        history = Simulator(scenario).run(plans)
         self.assertEqual(history.makespan, 3 * 2)
         self.assertEqual(plans[1][:3], [AtZone("start")] * 3)
 
@@ -99,7 +109,7 @@ class CliTests(unittest.TestCase):
             "end_hub: end 2 0\nconnection: start-a\nconnection: a-end\n")
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.splitlines(),
-                         ["D1-a", "D1-end", "D2-a", "D2-end"])
+                         ["D1-a", "D1-end D2-a", "D2-end"])
 
 
 if __name__ == "__main__":
