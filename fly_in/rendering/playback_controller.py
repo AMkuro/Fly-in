@@ -1,7 +1,7 @@
-"""Frame-index and timer controller for future snapshot playback.
+"""Frame-index and timer controller for playing a verified StateHistory.
 
-The current static map viewer does not need playback. This skeleton defines
-where playback state belongs once TurnSnapshot data exists.
+The viewer passes ``StateHistory.states`` as the snapshots, so each item is
+the confirmed ``TurnState`` ``S_t``. The controller never interprets them.
 """
 
 from __future__ import annotations
@@ -47,7 +47,34 @@ class PlaybackController:
         self._is_playing = False
         self._after_id: str | None = None
 
+    @property
+    def current_index(self) -> int:
+        """Return the index ``t`` of the snapshot ``S_t`` now shown."""
+        return self._current_index
+
+    @property
+    def is_playing(self) -> bool:
+        """Return whether automatic playback is running."""
+        return self._is_playing
+
     def step(self) -> None:
+        """Advance by one snapshot on a manual request.
+
+        A manual step is rejected while automatic playback is running. The
+        timer advances through ``_advance_one`` and is not affected.
+        """
+        if self._is_playing:
+            return
+        self._advance_one()
+
+    def step_back(self) -> None:
+        """Go back by one snapshot; ignored while playing or at ``S_0``."""
+        if self._is_playing or self._current_index == 0:
+            return
+        self._current_index -= 1
+        self._notify_snapshot_changed()
+
+    def _advance_one(self) -> None:
         """Advance by one snapshot and notify listeners."""
         if not self._snapshots:
             self._finish_playback()
@@ -97,7 +124,7 @@ class PlaybackController:
         if not self._is_playing:
             return
         previous_index = self._current_index
-        self.step()
+        self._advance_one()
         if not self._is_playing:
             return
         if self._current_index == previous_index:

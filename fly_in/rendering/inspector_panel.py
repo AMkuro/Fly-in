@@ -12,6 +12,7 @@ from fly_in.model.zone_model import Zone
 
 if TYPE_CHECKING:
     from fly_in.rendering.map_view import InspectTarget
+    from fly_in.rendering.turn_occupancy import TurnOccupancy
 
 
 class InspectorPanel(ttk.Frame):
@@ -81,35 +82,43 @@ class InspectorPanel(ttk.Frame):
         self,
         target: "InspectTarget",
         scenario: Scenario,
-        snapshot: object | None = None,
+        occupancy: TurnOccupancy | None = None,
     ) -> None:
-        """Render the current data for ``target`` and remember that target."""
+        """Render the current data for ``target`` and remember that target.
+
+        ``occupancy`` supplies the drones of the displayed turn; without it no
+        drone is listed.
+        """
         self._last_target = target
         if target.kind == "zone":
             zone = scenario.graph.zones.get(target.identifier)
             if zone is None:
                 self.clear()
                 return
-            self.show_zone(zone, scenario)
+            drones = occupancy.zone_ids(zone.name) if occupancy else ()
+            self.show_zone(zone, scenario, drones)
             return
         if target.kind == "connection":
             connection = self._connection_by_name(scenario, target.identifier)
             if connection is None:
                 self.clear()
                 return
-            self.show_connection(connection)
+            drones = (
+                occupancy.connection_ids(connection.name) if occupancy else ()
+            )
+            self.show_connection(connection, drones)
             return
         self.clear()
 
     def refresh(
         self,
         scenario: Scenario,
-        snapshot: object | None = None,
+        occupancy: TurnOccupancy | None = None,
     ) -> None:
-        """Refresh the remembered target after a future snapshot change."""
+        """Refresh the remembered target after the displayed turn changes."""
         if self._last_target is None:
             return
-        self.show_target(self._last_target, scenario, snapshot)
+        self.show_target(self._last_target, scenario, occupancy)
 
     def show_zone(
         self,
