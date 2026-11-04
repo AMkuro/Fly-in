@@ -56,7 +56,7 @@ class StateHistory:
         """
         if isinstance(state, InTransit):
             return f"D{drone_id}-{state.from_zone}-{state.to_zone}"
-        return f"D{drone_id}-{state.zone}"
+        return f"D{drone_id}-{state.destination}"
 
     def lines(self) -> list[str]:
         """Return one space-separated output line per turn (Subject VII.5)."""

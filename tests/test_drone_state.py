@@ -66,6 +66,26 @@ class DroneStateTests(unittest.TestCase):
                          ["at start", "start->r", "at r", "at end"])
         self.assertEqual(plan[-1], AtZone("end"))
 
+    def test_state_is_abstract_and_both_kinds_derive_from_it(self) -> None:
+        with self.assertRaises(TypeError):
+            DroneState()  # type: ignore[abstract]
+        self.assertIsInstance(AtZone("a"), DroneState)
+        self.assertIsInstance(InTransit("a", "b"), DroneState)
+
+    def test_destination_and_settle_turns(self) -> None:
+        at_zone, transit = AtZone("a"), InTransit("a", "b")
+        self.assertEqual((at_zone.destination, at_zone.settle_turns), ("a", 0))
+        self.assertEqual((transit.destination, transit.settle_turns), ("b", 1))
+
+    def test_resident_zone_is_none_only_in_transit(self) -> None:
+        self.assertEqual(AtZone("a").resident_zone, "a")
+        self.assertIsNone(InTransit("a", "b").resident_zone)
+
+    def test_token_follows_travel_order(self) -> None:
+        self.assertEqual(AtZone("a").token(3), "D3-a")
+        self.assertEqual(InTransit("a", "b").token(1), "D1-a-b")
+        self.assertEqual(InTransit("b", "a").token(1), "D1-b-a")
+
 
 if __name__ == "__main__":
     unittest.main()

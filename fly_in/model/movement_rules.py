@@ -38,16 +38,14 @@ class MovementRules:
             return None
         if after == before:
             return None
-        if before.zone == scenario.end_name:
-            return f"delivered drone at {before.zone} must not move"
+        if before.destination == scenario.end_name:
+            return f"delivered drone at {before.destination} must not move"
         if isinstance(after, InTransit):
-            if after.from_zone != before.zone:
-                return f"{after} does not start from {before.zone}"
-            target = after.to_zone
-        else:
-            target = after.zone
-        if graph.connection_between(before.zone, target) is None:
-            return f"no connection between {before.zone} and {target}"
+            if after.from_zone != before.destination:
+                return f"{after} does not start from {before.destination}"
+        target = after.destination
+        if graph.connection_between(before.destination, target) is None:
+            return f"no connection between {before.destination} and {target}"
         zone_type = graph.zone(target).zone_type
         if zone_type is ZoneType.BLOCKED:
             return f"{target} is blocked"
@@ -88,9 +86,10 @@ class MovementRules:
         """
         if isinstance(state, InTransit):
             return None
-        if state.zone in (self._scenario.start_name, self._scenario.end_name):
+        zone = state.destination
+        if zone in (self._scenario.start_name, self._scenario.end_name):
             return None
-        return state.zone
+        return zone
 
     @staticmethod
     def connection_used(
@@ -106,6 +105,6 @@ class MovementRules:
             return None
         if isinstance(after, InTransit):
             return Connection.key(after.from_zone, after.to_zone)
-        if after.zone == before.zone:
+        if after.destination == before.destination:
             return None
-        return Connection.key(before.zone, after.zone)
+        return Connection.key(before.destination, after.destination)
