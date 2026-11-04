@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TypeAlias
 
-from fly_in.model.drone_state import DroneState, InTransit
+from fly_in.model.drone_state import DroneState
 from fly_in.model.movement_rules import MovementRules
 from fly_in.model.scenario import Scenario
 
@@ -48,21 +48,11 @@ class StateHistory:
             if old != new
         )
 
-    @staticmethod
-    def token(drone_id: int, state: DroneState) -> str:
-        """Format one move as ``D<ID>-<zone>`` or ``D<ID>-<from>-<to>``.
-
-        The connection is written in travel order.
-        """
-        if isinstance(state, InTransit):
-            return f"D{drone_id}-{state.from_zone}-{state.to_zone}"
-        return f"D{drone_id}-{state.destination}"
-
     def lines(self) -> list[str]:
         """Return one space-separated output line per turn (Subject VII.5)."""
         return [
             " ".join(
-                self.token(drone_id, state)
+                state.token(drone_id)
                 for drone_id, state in self.moves(turn)
             )
             for turn in range(self.completion_turn)
