@@ -20,7 +20,7 @@ class DisplayStyle:
     """
 
     zone_radius: float = 30.0
-    map_margin: float = 70.0
+    map_margin: float = 100.0
     max_visible_drones_per_object: int = 5
     connection_label_offset: float = 20.0
     connection_line_width: int = 5

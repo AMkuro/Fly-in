@@ -148,5 +148,20 @@ class DroneMarkerDrawerTests(unittest.TestCase):
         self.assertEqual(self._texts()[-1], f"+{11 - limit}")
 
 
+class MarginTests(unittest.TestCase):
+    """The viewport margin must keep every marker inside the Canvas."""
+
+    def test_margin_covers_ring_marker_and_overflow_label(self) -> None:
+        """Margin >= ring distance + marker radius + room for ``+k``."""
+        style = DisplayStyle()
+        reach = (
+            style.zone_radius
+            + style.drone_marker_radius
+            + style.drone_zone_gap
+            + style.drone_marker_radius
+        )
+        self.assertGreaterEqual(style.map_margin, reach + 20)
+
+
 if __name__ == "__main__":
     unittest.main()

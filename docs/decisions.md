@@ -426,3 +426,14 @@
 - 旧判断との関係: [DEC-024](#dec-024)の「検証済みStateHistoryを表示する」を維持し、[DEC-037](#dec-037)がT11へ移管した最終表示方式の選択をGUI採用として確定する。
 - 承認根拠: 2026-11-04 JST、開発者がT11の設計判断（上記）を合意済みとして記録・実装着手を指示した。
 - 現行契約: [T11の表示契約](architecture.md#t11-visualization-contract)。実装の進捗と未実装項目は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で管理する。
+
+<a id="dec-040"></a>
+
+## DEC-040 — T11の表示用集計に読み取り専用の`TurnOccupancy`を追加する
+
+- 結論・状態: [DEC-039](#dec-039)が「必要になれば理由と契約への影響を示して別途承認」としていた表示用の追加型として、`fly_in/rendering/turn_occupancy.py`の`TurnOccupancy`を認める（`ACCEPTED`）。DEC-039の内容は変更しない。
+- 内容: 1つの`TurnState` `S_t`を、Zone名ごと・Connection名ごとのDrone ID（1始まり・昇順）へ並べ替える凍結dataclass。`InTransit`は無向の`graph.connection_between`で名前を引き、逆向きも同じConnectionにまとめる。
+- 契約への影響: なし。`StateHistory`・Solver・Simulationの契約は変更せず、`TurnOccupancy`は描画側（`MapView`・`InspectorPanel`）だけが読む。合法性判定・容量判定はせず、Reservation / Simulationへ渡さない。`cap X/N`のXは[DEC-039](#dec-039)の定義のまま。
+- 理由: マーカー配置・`cap X/N`・Inspector一覧が同じ集計を必要とする。型を置かないと各描画部品が`TurnState`の走査と無向Connectionの名前解決を重複して持つ。Tk非依存なので単体テストできる。
+- 承認根拠: 2026-11-04 JST、PR #31のCodexレビュー（P1）を受け、開発者が`TurnOccupancy`の内容（`TurnState`をZone / Connection別のDrone IDへ並べ替えるだけ）を確認し、「責務分離ができているならいいよ」と承認した。
+- 現行契約: [T11の表示契約](architecture.md#t11-visualization-contract)。実装は[PR #31](https://github.com/AMkuro/Fly-in/pull/31)。
