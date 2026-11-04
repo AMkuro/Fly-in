@@ -81,10 +81,15 @@ class DroneStateTests(unittest.TestCase):
         self.assertEqual(AtZone("a").resident_zone, "a")
         self.assertIsNone(InTransit("a", "b").resident_zone)
 
-    def test_token_follows_travel_order(self) -> None:
-        self.assertEqual(AtZone("a").token(3), "D3-a")
-        self.assertEqual(InTransit("a", "b").token(1), "D1-a-b")
-        self.assertEqual(InTransit("b", "a").token(1), "D1-b-a")
+    def test_travel_zones_follow_travel_order(self) -> None:
+        self.assertEqual(AtZone("a").travel_zones, ("a",))
+        self.assertEqual(InTransit("a", "b").travel_zones, ("a", "b"))
+        self.assertEqual(InTransit("b", "a").travel_zones, ("b", "a"))
+
+    def test_travel_zones_end_at_destination(self) -> None:
+        for state in (AtZone("a"), InTransit("a", "b")):
+            with self.subTest(state=state):
+                self.assertEqual(state.travel_zones[-1], state.destination)
 
 
 if __name__ == "__main__":

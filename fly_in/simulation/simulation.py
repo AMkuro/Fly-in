@@ -48,11 +48,19 @@ class StateHistory:
             if old != new
         )
 
+    @staticmethod
+    def _token(drone_id: int, state: DroneState) -> str:
+        """Format one move as ``D<ID>-<zone>`` or ``D<ID>-<from>-<to>``.
+
+        The connection is written in travel order (DEC-013, Subject VII.5).
+        """
+        return "-".join((f"D{drone_id}", *state.travel_zones))
+
     def lines(self) -> list[str]:
         """Return one space-separated output line per turn (Subject VII.5)."""
         return [
             " ".join(
-                state.token(drone_id)
+                self._token(drone_id, state)
                 for drone_id, state in self.moves(turn)
             )
             for turn in range(self.completion_turn)

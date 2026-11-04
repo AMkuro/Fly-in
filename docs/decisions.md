@@ -380,11 +380,11 @@
 
 ## DEC-036 — 提出対象全体からモジュール直下の関数を除く
 
-- 結論・状態: [DEC-034](#dec-034)の「状態や設定を持つ処理は必ずクラスにする」を、提出対象（`fly-in.py`と`fly_in/`）全体へ広げる。`movement_rules`・`pathfinding/`・`simulation/`の関数、CLIの関数、`Zone`名の検証関数、進入ターン数の関数を、所有するクラスのメソッドへ移す。あわせて、位置で参照していたタプル型（`ParsedLine`・`ParsedDeclaration`）を属性名で参照できる`NamedTuple`にし、`connection_key`を`Connection.key`へ一本化する。`DroneState`は`Union`の別名をやめて抽象基底クラスにし、`destination`・`settle_turns`・`resident_zone`・`token`を各状態に実装させる（`ACCEPTED`）。各クラスの責務・入出力は[architecture](architecture.md)を正本とする。
+- 結論・状態: [DEC-034](#dec-034)の「状態や設定を持つ処理は必ずクラスにする」を、提出対象（`fly-in.py`と`fly_in/`）全体へ広げる。`movement_rules`・`pathfinding/`・`simulation/`の関数、CLIの関数、`Zone`名の検証関数、進入ターン数の関数を、所有するクラスのメソッドへ移す。あわせて、位置で参照していたタプル型（`ParsedLine`・`ParsedDeclaration`）を属性名で参照できる`NamedTuple`にし、`connection_key`を`Connection.key`へ一本化する。`DroneState`は`Union`の別名をやめて抽象基底クラスにし、`destination`・`settle_turns`・`resident_zone`・`travel_zones`を各状態に実装させる。移動行の文字列（`D<ID>-…`）はモデルに持たせず、`StateHistory`が`travel_zones`とDrone IDから組み立てる（`ACCEPTED`）。各クラスの責務・入出力は[architecture](architecture.md)を正本とする。
 - 範囲外: 接続キーの専用型`ConnectionKey`は、効果に対して変更範囲が広いため作らない（見送り）。`DroneState`の`isinstance`のうち、前後2つの状態を比べる遷移判定と後続生成は、基底クラスへ移さず残す。`tools/`・`tests/`は提出対象外のため含めない。
 - 理由: Subjectは非オブジェクト指向の設計を評価の停止条件とする。DEC-034が「別途判断」としていた範囲を判断した。振る舞いは変えず、既存のテストを維持したまま形を変える。
 - 旧判断との関係: DEC-034の「対象は当面`parse/`と`common/`に限る」を拡大する。それ以外は維持する。
-- 承認根拠: 2026-11-02 JST、開発者による、OOP修正候補（#1〜#12）の提示後の「直していいけど、一個ずつcommitしていって」という指示。commit/push・提出反映の承認のうち、承認したのはcommitのみで、pushと提出反映は含まない。2026-11-04 JST、`DroneState`の基底クラス化について、開発者による「#7はやっていいとおもう」「#11は見送りでいいね」、および影響調査と4メンバー（`destination`・`settle_turns`・`resident_zone`・`token`）・別worktree方式の提示への「いいよ」という承認。
+- 承認根拠: 2026-11-02 JST、開発者による、OOP修正候補（#1〜#12）の提示後の「直していいけど、一個ずつcommitしていって」という指示。commit/push・提出反映の承認のうち、承認したのはcommitのみで、pushと提出反映は含まない。2026-11-04 JST、`DroneState`の基底クラス化について、開発者による「#7はやっていいとおもう」「#11は見送りでいいね」、および影響調査と4メンバー（`destination`・`settle_turns`・`resident_zone`・`token`）・別worktree方式の提示への「いいよ」という承認（この時点の4番目のメンバーは`token`）。2026-11-04 JST、設計レビューの結果を受けた開発者による「`DroneState`は物理状態を表すモデルなので、`D<ID>-<zone>`などの出力文字列を組み立てる責務は持たせない方が適切」という指示により、`token`を中立な`travel_zones`へ置き換えた。
 
 <a id="dec-037"></a>
 

@@ -37,9 +37,10 @@ class DroneState(ABC):
     def resident_zone(self) -> str | None:
         """Return the zone the drone stands in now, or ``None`` in transit."""
 
+    @property
     @abstractmethod
-    def token(self, drone_id: int) -> str:
-        """Format this state as one movement token (Subject VII.5)."""
+    def travel_zones(self) -> tuple[str, ...]:
+        """Return the zone names this state spans, in travel order."""
 
 
 @dataclass(frozen=True)
@@ -63,9 +64,10 @@ class AtZone(DroneState):
         """Return the zone the drone stands in."""
         return self.zone
 
-    def token(self, drone_id: int) -> str:
-        """Format the move as ``D<ID>-<zone>``."""
-        return f"D{drone_id}-{self.zone}"
+    @property
+    def travel_zones(self) -> tuple[str, ...]:
+        """Return the single zone the drone stands in."""
+        return (self.zone,)
 
     def __post_init__(self) -> None:
         """Reject names that cannot be a zone on any map."""
@@ -109,6 +111,7 @@ class InTransit(DroneState):
         """Return ``None``: a drone in transit occupies no zone."""
         return None
 
-    def token(self, drone_id: int) -> str:
-        """Format the move as ``D<ID>-<from>-<to>`` in travel order."""
-        return f"D{drone_id}-{self.from_zone}-{self.to_zone}"
+    @property
+    def travel_zones(self) -> tuple[str, ...]:
+        """Return the zone left and the zone entered, in travel order."""
+        return (self.from_zone, self.to_zone)
