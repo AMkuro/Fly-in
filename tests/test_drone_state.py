@@ -66,6 +66,13 @@ class DroneStateTests(unittest.TestCase):
                          ["at start", "start->r", "at r", "at end"])
         self.assertEqual(plan[-1], AtZone("end"))
 
+    def test_hierarchy_is_closed_to_two_states(self) -> None:
+        self.assertEqual(
+            set(DroneState.__subclasses__()), {AtZone, InTransit},
+            "A new DroneState needs a review of the isinstance branches "
+            "named in the DroneState docstring; then update this test.",
+        )
+
     def test_state_is_abstract_and_both_kinds_derive_from_it(self) -> None:
         with self.assertRaises(TypeError):
             DroneState()  # type: ignore[abstract]

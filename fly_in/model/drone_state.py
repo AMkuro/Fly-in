@@ -20,6 +20,18 @@ class DroneState(ABC):
     Each state answers the questions that differ between waiting in a zone
     and crossing a connection, so callers do not branch on the concrete
     class. Answers depend only on the state's own names, never on a map.
+
+    The hierarchy is closed to two states, the two situations of Subject
+    VII.3: waiting in a zone (``AtZone``) and crossing a connection toward a
+    restricted zone (``InTransit``). Some callers still branch on
+    ``InTransit`` and treat every other state as ``AtZone``. Before adding a
+    state, review these branches:
+
+    - ``MovementRules.step_error``
+    - ``MovementRules.connection_used``
+    - ``SpaceTimePlanner._successors``
+
+    ``test_hierarchy_is_closed_to_two_states`` fails until this is done.
     """
 
     @property
