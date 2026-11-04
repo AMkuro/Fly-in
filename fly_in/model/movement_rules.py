@@ -84,9 +84,7 @@ class MovementRules:
         Start and end have no capacity limit; a drone in transit occupies
         its connection, not a zone.
         """
-        if isinstance(state, InTransit):
-            return None
-        zone = state.destination
+        zone = state.resident_zone
         if zone in (self._scenario.start_name, self._scenario.end_name):
             return None
         return zone
