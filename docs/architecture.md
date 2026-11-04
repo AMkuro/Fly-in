@@ -13,7 +13,7 @@
 
 | 領域・コード | 現在の責務と境界 |
 |---|---|
-| [CLI](../fly-in.py)（`Cli`クラス）、[FlyInApp](../fly_in/orchestra.py) | Parserの解析結果から`ScenarioBuilder().build()`で設定を確定する。ScenarioをScheduler・Simulationまたは静的Viewerへ渡す。移動行をstdoutへ出し、到達不能時はstderrへ`Error: No path from start to end.`を出して終了コード1を返す |
+| [CLI](../fly-in.py)（`Cli`クラス）、[FlyInApp](../fly_in/orchestra.py) | Parserの解析結果から`ScenarioBuilder().build()`で設定を確定する。ScenarioからScheduler・Simulationで検証済み`StateHistory`を生成し、CLIは移動行をstdoutへ出し、`--gui`は同じ履歴を`ViewerApp`へ渡す（GUIは起動後に再計画・再検証しない）。到達不能時はstderrへ`Error: No path from start to end.`を出して終了コード1を返す |
 | [Parser](../fly_in/parse/map_parser.py) | 構文と単一オブジェクトを解析し、宣言順・物理行番号を持つ`ParsedMap`を返す。全体検証と実行設定の構築は呼び出し側が`ScenarioBuilder`へ依頼する |
 | [Zone](../fly_in/model/zone_model.py)・[Connection](../fly_in/model/connection_model.py) | 出典行を持たないPydanticモデル。各モデルがメタデータの許可キーと属性への対応付け、整数字句・型変換・局所的な値の制約を検証する。Connectionの自己ループも拒否する。メタデータの対応付けと整数字句の検査は共通基底クラス[MetadataModel](../fly_in/model/metadata_model.py)に置き、抽象基底クラスとして各モデルに`metadata_spec()`（種別名・許可キーと属性の対応・整数属性）だけを実装させる |
 | [MapGraph](../fly_in/model/map_graph.py) | `from_models()`で検証済みZone・Connectionから索引と隣接関係を構築する。start/endの役割、機体数、宣言種別・行番号には依存しない。blockedもトポロジーに残す |
@@ -23,11 +23,11 @@
 | [Simulation](../fly_in/simulation/simulation.py) | `Simulator`が全機体分の完成Planを受け取り、Reservationを使わずに全Droneの`S_t`を再構築して、Zone・Connection容量と全機体のend到着を独立に検証する。成功すると不変の`StateHistory`（`states[t][i]`がDrone `i+1`の`S_t`）を返し、失敗すると`SimulationError`を送出する。`StateHistory.lines()`はVII.5の移動行を生成する（Connectionは移動方向順、DEC-013）。このStateHistoryがCLI出力および今後の可視化へ渡す検証済み履歴となる |
 | [静的最短経路](../fly_in/pathfinding/static_distance.py)、[逐次配送](../fly_in/pathfinding/fallback.py) | 他機体を無視した、endまでの最短ターン数を逆向きDijkstraで求める（進入コスト: restricted 2、normal/priority 1、blockedは進入不可）。startが到達不能なら`NoPathError`を送出する。最短経路では同着時にpriorityを優先する（DEC-020）。逐次配送（`SequentialFallback`）は、Drone `k`をターン`k×L`に出発させるDEC-017の合法なフォールバックであり、Schedulerの初期bestとして利用する |
 | [Planner](../fly_in/pathfinding/planner.py)、[Scheduler](../fly_in/pathfinding/scheduler.py) | Planner（`SpaceTimePlanner`）は`(状態, t)`上の時間付き予約A*（`f=t+静的残りターン`）で、Reservationを読むだけで1機分の最早到着Planを返す。同じ`f`の候補はpriority進入数→混雑度（重み付き）→seed付き乱数の順で選ぶ。Schedulerは逐次配送を初期の最良計画`U`とし、試行ごとに空のReservationへ全機体を期限`U-1`で計画して、成功すれば置き換える。試行上限8回、または下界（startの静的距離）に達したら終了する。これはT03の基準方式を具体化した現行実装であり、試行回数・混雑重み・seed等は必要に応じてT12A/T19で性能調整する（DEC-038） |
-| [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | Scenario内のGraphを静的描画し、Scenarioのstart/endの役割を表示に使う。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する |
+| [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | Scenario内のGraphを静的描画し、Scenarioのstart/endの役割を表示に使う。`ViewerApp`は検証済み`StateHistory`を受け取り保持するが、現時点では描画・再生に使わない（[T11](#t11-visualization-contract)の変更2以降）。Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品は存在する。Viewerには未接続で、Snapshot生成処理もない。`Sequence[object]`を承認済みSnapshot型とは扱わない |
 | [開発用検証器](../tools/verify_subject.py) | Scenarioの入力事実を使ってCLI出力を独立に再生検証する。本体の探索・Scheduler・Simulationは呼ばない。Subject適合性の確定した根拠ではない |
 
-現時点の接続は`CLI → FlyInApp → Parser → ParsedMap → 全体検証 → Graph構築 → Scenario →` 計画 `→ Simulation → 移動行`。`--gui`は同じScenarioを使う静的表示。
+現時点の接続は`CLI → FlyInApp → Parser → ParsedMap → 全体検証 → Graph構築 → Scenario →` 計画 `→ Simulation → 移動行`。`--gui`は同じ`StateHistory`を`ViewerApp`へ渡すが、表示は静的マップのまま。
 現在のデータ形式は実装の観測結果であり、将来も固定する契約ではない（[DEC-003](decisions.md#dec-003)）。
 
 <a id="parser-pipeline"></a>
@@ -224,6 +224,16 @@ T02の完了条件は、各実装詳細を将来にわたり固定すること�
 - 逐次的な機体割当ては全体Makespanの最小性や探索の完全性を保証しない。Subjectの最適ターン目標と合法性を区別し、実装後にそれぞれ評価する。
 - 現行の具体実装では、同じ到着見込みの候補に対してpriority進入数、混雑度、seed付き乱数の順でtie-breakし、Schedulerは有限回の全体再試行を行う。これらの数値・詳細順位は基準方式を成立させる実装パラメータであり、T03の完了条件にはしない。性能上の必要があれば[T12A / #12](https://github.com/AMkuro/Fly-in/issues/12)または[T19 / #21](https://github.com/AMkuro/Fly-in/issues/21)で比較・調整する。
 - [T02 / #2](https://github.com/AMkuro/Fly-in/issues/2)との共有契約照合と現行実装の読解レビューを終え、T03の基準方式選定は完了とする。逐次計画の全体最適性・完全性を保証しない点は引き続き明示する（[DEC-038](decisions.md#dec-038)）。
+
+<a id="t11-visualization-contract"></a>
+
+### T11 — 必須の可視化（設計承認済み・実装は段階的）
+
+表示方式は既存Tkinter GUIとし、検証済み`StateHistory`の`states[t]`をそのまま描画単位とする。採用理由・表示規則・Playback仕様は[DEC-039](decisions.md#dec-039)を正本とし、ここには複製しない。**以下は承認済みの契約であり、実装済みではない**（実装状況は上のImplemented節と[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)を参照）。
+
+- 経路: `Scenario → Scheduler → Simulator → StateHistory → ViewerApp`。GUIは起動後にSchedulerやSimulatorを再実行せず、探索・合法性判定を持たない。
+- 表示するのは離散ターンの確定状態`S_t`で、Drone markerの位置（`AtZone`はZone上、`InTransit`はConnection上）、Zone / Connectionの滞在機体数、到着済み表現、手動Step・自動再生を含む。
+- Zone / Connectionの`cap X/N`のXは`S_t`の滞在機体数で、Simulationの容量判定量`U_e(t)`とは別。start/endは無制限として扱う。
 
 <a id="incremental-implementation-policy"></a>
 

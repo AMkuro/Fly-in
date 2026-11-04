@@ -7,6 +7,7 @@ import tkinter as tk
 from fly_in.model.scenario import Scenario
 from fly_in.rendering.inspector_panel import InspectorPanel
 from fly_in.rendering.map_view import InspectTarget, MapView
+from fly_in.simulation.simulation import StateHistory
 
 
 class ViewerApp(tk.Tk):
@@ -33,14 +34,21 @@ class ViewerApp(tk.Tk):
     MAP_MIN_WIDTH = 650
     INSPECTOR_MIN_WIDTH = 250
 
-    def __init__(self, scenario: Scenario, inspect_mode: bool = False) -> None:
-        """Create the viewer for an already built ``Scenario``.
+    def __init__(
+        self,
+        scenario: Scenario,
+        history: StateHistory,
+        inspect_mode: bool = False,
+    ) -> None:
+        """Create the viewer for a ``Scenario`` and its verified history.
 
-        ``inspect_mode`` is accepted for future playback inspection. Static map
-        visualization can ignore it until snapshots and controls are added.
+        ``history`` is kept read-only for later playback; the map is still
+        drawn statically. ``inspect_mode`` is accepted for future playback
+        inspection and is ignored until controls are added.
         """
         super().__init__()
         self._scenario = scenario
+        self._history = history
         self._inspect_mode = inspect_mode
         self._map_view: MapView | None = None
         self._inspector: InspectorPanel | None = None
