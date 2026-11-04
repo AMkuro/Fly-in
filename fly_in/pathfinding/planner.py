@@ -104,14 +104,11 @@ class SpaceTimePlanner:
 
     def _unreachable(self, state: DroneState) -> bool:
         """Return whether the end cannot be reached from ``state`` at all."""
-        zone = state.to_zone if isinstance(state, InTransit) else state.zone
-        return zone not in self._distance
+        return state.destination not in self._distance
 
     def _heuristic(self, state: DroneState) -> int:
         """Static fewest turns to the end; a transit still needs arrival."""
-        if isinstance(state, InTransit):
-            return 1 + self._distance[state.to_zone]
-        return self._distance[state.zone]
+        return state.settle_turns + self._distance[state.destination]
 
     def _successors(
         self, state: DroneState, turn: int
@@ -126,27 +123,28 @@ class SpaceTimePlanner:
             arrival = AtZone(state.to_zone)
             if not self._zone_has_room(arrival.zone, turn + 1):
                 return []
-            return [(arrival, 0, self._zone_crowd(arrival, turn + 1))]
+            return [(arrival, 0, self._zone_crowd(arrival.zone, turn + 1))]
         graph = reservation.graph
         result: list[tuple[DroneState, int, int]] = []
-        if self._zone_has_room(state.zone, turn + 1):
-            result.append((state, 0, self._zone_crowd(state, turn + 1)))
-        for neighbor in graph.neighbors_for(state.zone):
+        here = state.destination
+        if self._zone_has_room(here, turn + 1):
+            result.append((state, 0, self._zone_crowd(here, turn + 1)))
+        for neighbor in graph.neighbors_for(here):
             turns = graph.zone(neighbor).entry_turns
-            key = Connection.key(state.zone, neighbor)
+            key = Connection.key(here, neighbor)
             link_used = reservation.connection_usage(turn, key)
             if turns is None or (
                 link_used >= reservation.connection_capacity(key)
             ):
                 continue
             if turns == 2:
-                result.append((InTransit(state.zone, neighbor), 0, link_used))
+                result.append((InTransit(here, neighbor), 0, link_used))
                 continue
             if not self._zone_has_room(neighbor, turn + 1):
                 continue
             after = AtZone(neighbor)
             is_priority = graph.zone(neighbor).zone_type is ZoneType.PRIORITY
-            crowd = link_used + self._zone_crowd(after, turn + 1)
+            crowd = link_used + self._zone_crowd(neighbor, turn + 1)
             result.append((after, int(is_priority), crowd))
         return result
 
@@ -159,9 +157,9 @@ class SpaceTimePlanner:
         used = reservation.zone_occupancy(turn, zone)
         return used < reservation.zone_capacity(zone)
 
-    def _zone_crowd(self, state: AtZone, turn: int) -> int:
+    def _zone_crowd(self, zone: str, turn: int) -> int:
         """Return committed drones sharing the zone at ``S_turn``."""
-        return self._reservation.zone_occupancy(turn, state.zone)
+        return self._reservation.zone_occupancy(turn, zone)
 
     @staticmethod
     def _rebuild(
