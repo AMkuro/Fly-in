@@ -11,7 +11,6 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from fly_in.model.drone_state import AtZone
 from fly_in.model.map_graph import MapGraph
 from fly_in.simulation.simulation import TurnState
 
@@ -39,16 +38,16 @@ class TurnOccupancy:
         connections: defaultdict[str, list[int]] = defaultdict(list)
         for index, drone in enumerate(state):
             drone_id = index + 1
-            if isinstance(drone, AtZone):
-                zones[drone.zone].append(drone_id)
+            zone = drone.resident_zone
+            if zone is not None:
+                zones[zone].append(drone_id)
                 continue
-            connection = graph.connection_between(
-                drone.from_zone, drone.to_zone
-            )
+            from_zone, to_zone = drone.travel_zones
+            connection = graph.connection_between(from_zone, to_zone)
             if connection is None:
                 raise ValueError(
                     f"drone {drone_id} is in transit on a missing "
-                    f"connection {drone.from_zone}-{drone.to_zone}"
+                    f"connection {from_zone}-{to_zone}"
                 )
             connections[connection.name].append(drone_id)
         return cls(

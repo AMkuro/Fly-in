@@ -4,7 +4,7 @@ import unittest
 from typing import Any
 from unittest.mock import Mock, patch
 
-from fly_in.model.drone_state import AtZone, InTransit
+from fly_in.model.drone_state import AtZone, DroneState, InTransit
 from fly_in.pathfinding.scheduler import Scheduler
 from fly_in.rendering.display_style import DisplayStyle
 from fly_in.rendering.turn_occupancy import TurnOccupancy
@@ -55,7 +55,7 @@ class MapViewSnapshotTests(unittest.TestCase):
         self.view._last_canvas_size = None
         self.view._occupancy = None
 
-    def _occupancy(self, *state: AtZone | InTransit) -> TurnOccupancy:
+    def _occupancy(self, *state: DroneState) -> TurnOccupancy:
         """Group a hand-written state on the test map."""
         return TurnOccupancy.from_state(state, self.scenario.graph)
 
