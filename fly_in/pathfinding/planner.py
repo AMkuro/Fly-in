@@ -108,9 +108,7 @@ class SpaceTimePlanner:
 
     def _heuristic(self, state: DroneState) -> int:
         """Static fewest turns to the end; a transit still needs arrival."""
-        if isinstance(state, InTransit):
-            return 1 + self._distance[state.to_zone]
-        return self._distance[state.destination]
+        return state.settle_turns + self._distance[state.destination]
 
     def _successors(
         self, state: DroneState, turn: int
