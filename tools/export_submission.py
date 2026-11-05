@@ -34,8 +34,13 @@ class SubmissionExport:
             if line.strip() and not line.lstrip().startswith("#")
         ]
 
-    def export(self, destination: Path) -> None:
-        """Copy allowed blobs; refuse existing output and symlinks."""
+    def select(self) -> list[tuple[str, str, str]]:
+        """Return ``(path, blob, mode)`` of the allowed files of this commit.
+
+        Symlinks, unsafe paths and manifest entries that match nothing are
+        rejected, so the selection is the same for the export and the
+        release candidate.
+        """
         patterns = self.patterns()
         entries = subprocess.check_output(
             ["git", "ls-tree", "-rz", self.commit]
@@ -58,6 +63,11 @@ class SubmissionExport:
         if not patterns or set(patterns) != matched:
             missing = set(patterns) - matched
             raise ValueError(f"Unmatched manifest entries: {missing}")
+        return selected
+
+    def export(self, destination: Path) -> None:
+        """Copy allowed blobs; refuse existing output and symlinks."""
+        selected = self.select()
         destination.mkdir(parents=True, exist_ok=False)
         for path, blob, mode in selected:
             target = destination / path

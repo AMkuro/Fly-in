@@ -437,3 +437,17 @@
 - 理由: マーカー配置・`cap X/N`・Inspector一覧が同じ集計を必要とする。型を置かないと各描画部品が`TurnState`の走査と無向Connectionの名前解決を重複して持つ。Tk非依存なので単体テストできる。
 - 承認根拠: 2026-11-04 JST、PR #31のCodexレビュー（P1）を受け、開発者が`TurnOccupancy`の内容（`TurnState`をZone / Connection別のDrone IDへ並べ替えるだけ）を確認し、「責務分離ができているならいいよ」と承認した。
 - 現行契約: [T11の表示契約](architecture.md#t11-visualization-contract)。実装は[PR #31](https://github.com/AMkuro/Fly-in/pull/31)。
+
+<a id="dec-041"></a>
+
+## DEC-041 — リリースは`main`への提出候補PRとし、GitHub Actionsは手動実行・計画ハッシュ承認で候補を作る
+
+- 結論・状態: 次を採用する（`ACCEPTED`、開発者の指示による）。実装方式の細部（計画ハッシュ、`release/*`の命名、`release`環境の利用）は`PROPOSED`で、実装PRのレビューで確定する。
+  - **ブランチの役割**: `develop`＝開発・検証、`main`＝レビュー済みリリース・提出候補、`master`＝旧リリースブランチ（新規リリースには使わない）、`archive/legacy-main-20261105`＝旧`main`履歴の保存先。`main`を削除せず、`master`を改名せず、既存の`main`をリリース先として再利用する。デフォルトブランチは`develop`のまま。
+  - **候補の作り方**: `develop`を直接マージせず、固定した`develop`の1コミットから`submission-files.txt`で選んだファイルのスナップショットを、`main`の既存履歴の上に1コミットとして載せる。抽出は既存の`SubmissionExport`を再利用する。履歴の置換・force pushはしない。
+  - **公開と承認**: GitHub Actionsは手動実行（`workflow_dispatch`）のみで、通常のpushでは何も作らない。候補は`release/*`ブランチと`main`宛のPRとして提示し、PRの作成はリリース承認ではない。マージは人間がPRを読んで行い、自動マージはしない。Ruleset「Protect release branch」は無効化・緩和しない。42提出リポジトリへの反映は別の操作。
+- 実装案（`PROPOSED`）: 1回目の実行（dry run）は読み取り権限のみで検証し、変更計画（追加・変更・削除、`main`にある想定外のファイル）とそのハッシュを出す。2回目に同じハッシュを渡したときだけ、書き込み権限のジョブが動き、計画が変わっていれば止まる。想定外の削除は、計画を人間が読んで承認した場合にだけ行われる。
+- 公開後の担保（`PROPOSED`）: PRを開いた後は自動の再検証がない（既存の検証ワークフローは`develop`宛のPRのみ、`main`のRulesetに必須チェック・必須承認はない）。マージ直前に`verify`（ワークフローの`verify_branch`またはローカル）で、最終headが固定した元コミットの候補と一致することを人間が確認し、headが変わったら計画から承認し直す。
+- 理由: 開発履歴全体を提出ブランチへ流さず、提出対象だけを再現可能に残すため。承認前に削除対象を確認でき、レビュー済みの候補が気づかないうちに別の内容へ変わることを防ぐ。
+- 承認根拠: 2026-11-05 JST、開発者の依頼（GitHub Actionsによるmain向けリリースPRの構築）。ブランチ構成と禁止事項を指定された。T14・T15の移行操作の経緯は[T15](https://github.com/AMkuro/Fly-in/issues/17)に記録した。
+- 現行契約: [リリース候補の手順](development.md#release-candidate-workflow)、[責務](architecture.md)。関連Issue: [T14 / #16](https://github.com/AMkuro/Fly-in/issues/16)・[T16 / #18](https://github.com/AMkuro/Fly-in/issues/18)・[T17 / #19](https://github.com/AMkuro/Fly-in/issues/19)。

@@ -26,6 +26,7 @@
 | [ViewerApp](../fly_in/rendering/viewer_app.py)、[MapView](../fly_in/rendering/map_view.py) | Scenario内のGraphを静的描画し、Scenarioのstart/endの役割を表示に使う。`ViewerApp`は検証済み`StateHistory`を受け取り、表示中のターン`S_t`を[TurnOccupancy](../fly_in/rendering/turn_occupancy.py)（Tk非依存の読み取り専用の集計）に直して`MapView`と`InspectorPanel`へ渡す。`MapView`は`show_snapshot()`で`S_t`を描画し、`AtZone`はZone上、`InTransit`は対応するConnection上に[DroneMarkerDrawer](../fly_in/rendering/drone_markers.py)でDrone ID付きのmarkerを置く（1か所の表示は上限5機で、超過分は`+k`。到着済みはendの色で区別）。`cap X/N`のXは`S_t`の滞在機体数で、start/endには容量表示を出さない。Resizeでは同じ`S_t`を再描画する。Inspectorは選択中のZone / Connectionに現在いるDroneを表示し、ターン変更で更新する。これらは検証済み履歴の表示であり、合法性・容量の判定をReservation / Simulationへ戻さない（[T11](#t11-visualization-contract)）Viewerは部品とイベントを接続し、MapViewはCanvas描画、[Viewport](../fly_in/rendering/viewport.py)は座標変換、[InspectorPanel](../fly_in/rendering/inspector_panel.py)は対象情報を表示する |
 | [PlaybackController](../fly_in/rendering/playback_controller.py)、[PlaybackControls](../fly_in/rendering/playback_panel.py) | 再生位置・タイマーと操作UIの部品。`ViewerApp`が`StateHistory.states`を渡して接続済みで、Continue / Pause / Back / Step / Restartで表示ターンの位置表示が進む。自動再生中は手動のStepとBackを拒否し（タイマー内部の進行は拒否しない）、操作パネルはPauseのみ有効にする。終了時（`ViewerApp.destroy`）に予約済みの`after`をキャンセルし、再生終了後は最終ターンで自動停止する。Snapshot専用のDTOは追加していない |
 | [開発用検証器](../tools/verify_subject.py) | Scenarioの入力事実を使ってCLI出力を独立に再生検証する。本体の探索・Scheduler・Simulationは呼ばない。Subject適合性の確定した根拠ではない |
+| [リリース候補](../tools/prepare_submission.py)、[ワークフロー](../.github/workflows/release-candidate.yml) | 固定した`develop`の1コミットから、`submission-files.txt`で選んだblobだけを`main`の既存履歴の上に1コミットとして作り、変更計画（追加・変更・削除、想定外のファイル）とそのハッシュを出す。承認済みハッシュがあるときだけ`release/*`をforceなしでpushし、`main`宛のPRを作る。マージはしない。手順は[開発手順](development.md#release-candidate-workflow) |
 
 現時点の接続は`CLI → FlyInApp → Parser → ParsedMap → 全体検証 → Graph構築 → Scenario →` 計画 `→ Simulation → 移動行`。`--gui`は同じ`StateHistory`を`ViewerApp`へ渡し、再生操作で`S_0`〜`S_T`を表示する。実画面での確認は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で行う。
 現在のデータ形式は実装の観測結果であり、将来も固定する契約ではない（[DEC-003](decisions.md#dec-003)）。
@@ -245,7 +246,7 @@ T02の完了条件は、各実装詳細を将来にわたり固定すること�
 - **後続の目安（自動の一括承認ではない）**：Reservation（T01合法性と容量キャッシュ・確定時整合性）→Simulation（独立検証・StateHistory・規定CLI出力）→静的逐次配送のフォールバックとPlanner/Schedulerの時間付き予約A*・全体再試行。各工程は必要になった契約の承認済み範囲に限定する。
 - **検証と読解**：小単位ごとに、差分・採用理由・データフロー・不変条件・反例を提示し、手計算したテストや独立の確認で点検する。対象テスト・flake8・mypyも実行して結果を記録する。AIが生成したことやテスト成功だけを正当性の根拠としない。
 - **依然未決**：Reservationの詳細な例外時原子性・API、Simulationの詳細型とエラー、Rendererの型と最終表示方式、T03の経路分散評価・探索予算・その他の最適化詳細。具体的に必要になる工程で判断し、`OPEN`・`PROPOSED`を独断で確定しない。
-- **提出ゲートは維持**：通常の開発作業を許可しても、`master`・42提出リポジトリへの反映は別途人間のレビューと明示承認を要する。作業ルールは[AGENTS.md](../AGENTS.md)、進捗・受け入れ条件はT02/T03/T06/T07のIssuesを正本とする。
+- **提出ゲートは維持**：通常の開発作業を許可しても、`main`・42提出リポジトリへの反映は別途人間のレビューと明示承認を要する。作業ルールは[AGENTS.md](../AGENTS.md)、進捗・受け入れ条件はT02/T03/T06/T07のIssuesを正本とする。
 
 ## Proposed
 
