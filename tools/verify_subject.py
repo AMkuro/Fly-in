@@ -20,6 +20,45 @@ from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
 
 
+# Subject v2.0 VII.6 / IX reference turns, keyed by "<category>/<file>".
+# They only feed a report: speed never decides whether output is valid.
+OPTIMUM_TURNS: dict[str, int] = {
+    "easy/01_linear_path.txt": 4,
+    "easy/02_simple_fork.txt": 4,
+    "easy/03_basic_capacity.txt": 4,
+    "medium/01_dead_end_trap.txt": 8,
+    "medium/02_circular_loop.txt": 10,
+    "medium/03_priority_puzzle.txt": 6,
+    "hard/01_maze_nightmare.txt": 13,
+    "hard/02_capacity_hell.txt": 16,
+    "hard/03_ultimate_challenge.txt": 26,
+    "challenger/01_the_impossible_dream.txt": 43,
+}
+UNREACHABLE_MESSAGE = "Error: No path from start to end."
+LINT_REQUIRED = (
+    r"flake8\s+\.", r"mypy\s+\.", "--warn-return-any",
+    "--warn-unused-ignores", "--ignore-missing-imports",
+    "--disallow-untyped-defs", "--check-untyped-defs",
+)
+
+
+def performance_note(key: str, turns: int) -> str:
+    """Compare turns with the Subject optimum; this never gates validity.
+
+    "Within 25%" is read inclusively (turns <= 1.25 * optimum).
+    """
+    optimum = OPTIMUM_TURNS.get(key)
+    if optimum is None:
+        return ""
+    if turns == optimum:
+        status = "optimal"
+    elif turns * 4 <= optimum * 5:
+        status = "within 25%"
+    else:
+        status = "over 25%"
+    return f" (optimum {optimum}: {status})"
+
+
 class MovementVerifier:
     """Replay occupancy, connection use and mandatory two-turn arrivals."""
 
@@ -143,6 +182,7 @@ class SubjectVerifier:
         for rule in ("install", "run", "debug", "clean", "lint"):
             if re.search(rf"(?m)^{rule}:", makefile) is None:
                 raise ValueError(f"missing Makefile rule: {rule}")
+        self.check_lint_rule()
         forbidden = {
             "graphlib", "networkx", "igraph", "networkit", "rustworkx",
             "graph_tool", "scipy",
@@ -168,6 +208,43 @@ class SubjectVerifier:
                     imports = [node.module or ""]
                 if any(name.split(".")[0] in forbidden for name in imports):
                     raise ValueError(f"forbidden graph library: {path}")
+
+    def check_lint_rule(self) -> None:
+        """Require the Subject III.2 flake8/mypy command in the lint rule."""
+        recipe: list[str] = []
+        inside = False
+        for line in (self.root / "Makefile").read_text().splitlines():
+            if line.startswith("lint:"):
+                inside = True
+            elif inside and line and not line[0].isspace():
+                break
+            elif inside:
+                recipe.append(line)
+        text = "\n".join(recipe)
+        for required in LINT_REQUIRED:
+            if re.search(required, text) is None:
+                raise ValueError(f"lint rule lacks: {required}")
+
+    def check_unreachable(self) -> None:
+        """Require the DEC-013 report for a map with no start-end path."""
+        fixtures = (
+            Path(__file__).resolve().parents[1]
+            / "tests/fixtures/unreachable"
+        )
+        for path in sorted(fixtures.glob("*.txt")):
+            result = subprocess.run(
+                [sys.executable, str(self.root / "fly-in.py"), str(path)],
+                cwd=self.root, capture_output=True, text=True, timeout=20,
+            )
+            if result.returncode != 1 or (
+                result.stderr.strip() != UNREACHABLE_MESSAGE
+            ):
+                raise ValueError(
+                    f"{path.name}: expected exit 1 with "
+                    f"{UNREACHABLE_MESSAGE!r}, got {result.returncode} "
+                    f"{result.stderr.strip()!r}"
+                )
+            print(f"PASS {path.name}: unreachable reported")
 
     def check_readme(self) -> None:
         """Check the required first line and sections without a length rule."""
@@ -204,6 +281,8 @@ class SubjectVerifier:
             if not paths:
                 raise ValueError(f"missing mandatory maps: {category}")
             cases.extend(paths)
+        # Optional Challenger map (Subject IX): replayed when shipped.
+        cases.extend(sorted((self.root / "maps" / "challenger").glob("*.txt")))
         cases.extend(
             sorted(
                 (Path(__file__).resolve().parents[1]
@@ -225,7 +304,8 @@ class SubjectVerifier:
                 turns = MovementVerifier(scenario).verify(result.stdout)
             except ValueError as error:
                 raise ValueError(f"{path.name}: {error}") from error
-            print(f"PASS {path.name}: {turns} turns")
+            note = performance_note(f"{path.parent.name}/{path.name}", turns)
+            print(f"PASS {path.name}: {turns} turns{note}")
 
 
 def main() -> int:
@@ -235,7 +315,10 @@ def main() -> int:
     args = parser.parse_args()
     verifier = SubjectVerifier(args.candidate)
     failed = False
-    for check in (verifier.check_structure, verifier.check_movements):
+    for check in (
+        verifier.check_structure, verifier.check_movements,
+        verifier.check_unreachable,
+    ):
         try:
             check()
         except (ValueError, OSError, subprocess.SubprocessError) as error:
