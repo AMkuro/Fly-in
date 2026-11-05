@@ -176,3 +176,57 @@ class ReleaseCandidateTests(unittest.TestCase):
         self.git("commit", "-qm", "link")
         result = self.plan_command(self.git("rev-parse", "HEAD"))
         self.assertNotEqual(result.returncode, 0)
+
+    def test_later_develop_commits_do_not_change_the_plan(self) -> None:
+        """The source SHA is fixed; develop moving on is not part of it."""
+        before = self.plan()[1]
+        self.write("README.md", "work after the release source")
+        self.write("app/new_feature.py", "# later work\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "later work on develop")
+        self.assertEqual(self.plan()[1], before)
+        built = self.commit(before).stdout.strip()
+        self.assertEqual(
+            self.git("show", f"{built}:README.md"), "new readme"
+        )
+        self.assertNotIn("new_feature", self.git("ls-tree", "-r", built))
+
+    def verify(self, head: str) -> subprocess.CompletedProcess[str]:
+        """Run ``verify`` for a branch head against the fixed source."""
+        return self.tool("verify", "--source", self.source, "--head", head,
+                         "--base", "main", "--develop", "develop")
+
+    def test_verify_accepts_the_built_candidate(self) -> None:
+        """The branch that was built passes the check before merging."""
+        built = self.commit(self.plan()[1]).stdout.strip()
+        result = self.verify(built)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_verify_refuses_a_head_that_changed_after_review(self) -> None:
+        """A later commit on the release branch cannot pass unnoticed."""
+        built = self.commit(self.plan()[1]).stdout.strip()
+        self.git("checkout", "-q", "-b", "release", built)
+        self.write("README.md", "edited after review")
+        self.git("commit", "-qam", "late edit")
+        late = self.verify("release")
+        self.assertEqual(late.returncode, 1)
+        self.assertIn("does not hold exactly", late.stderr)
+        self.git("reset", "-q", "--hard", built)
+        self.write("app/extra.py", "# smuggled\n")
+        self.git("add", ".")
+        self.git("commit", "-q", "--amend", "-m", "amended")
+        amended = self.verify("release")
+        self.assertEqual(amended.returncode, 1)
+        self.assertIn("does not hold exactly", amended.stderr)
+
+    def test_verify_refuses_when_main_moved_since(self) -> None:
+        """A branch built on an older main is not the current candidate."""
+        built = self.commit(self.plan()[1]).stdout.strip()
+        self.git("checkout", "-q", "main")
+        self.write("other.txt", "another change on main")
+        self.git("add", ".")
+        self.git("commit", "-qm", "main moved")
+        self.git("checkout", "-q", "develop")
+        result = self.verify(built)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("make a new plan", result.stderr)

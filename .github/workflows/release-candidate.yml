@@ -3,6 +3,8 @@ name: Release candidate
 # Manual only. A dry run verifies one develop commit and prints a plan. Only a
 # run that is given the hash of a reviewed plan pushes a new release/* branch
 # and opens a pull request into main. It never merges and never pushes to main.
+# With verify_branch it only checks, read only, that a release/* branch still
+# holds exactly the candidate (run it just before merging).
 
 on:
   workflow_dispatch:
@@ -13,6 +15,11 @@ on:
         type: string
       approved_plan_hash:
         description: Plan hash from a reviewed dry run (empty = dry run)
+        required: false
+        default: ''
+        type: string
+      verify_branch:
+        description: release/* branch to check before merging (read only)
         required: false
         default: ''
         type: string
@@ -27,7 +34,7 @@ concurrency:
 jobs:
   candidate:
     name: Verify and plan
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' && inputs.verify_branch == ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -149,14 +156,21 @@ jobs:
             echo
             echo "## Not verified"
             echo "- The 42 submission repository is not updated."
-            echo "- This pull request was opened with \`GITHUB_TOKEN\`, so the"
-            echo "  usual pull_request workflows do not run on it."
+            echo "- After this pull request is open, nothing re-verifies the"
+            echo "  branch. The repository workflows run for pull requests"
+            echo "  into develop only, and the ruleset requires no status check."
             echo "- The window (GUI) and maps other than the distributed ones."
             echo
             echo "## Regenerate"
             echo "Run the \"Release candidate\" workflow from develop with"
             echo "source_sha=$SOURCE_SHA (dry run), then again with"
             echo "approved_plan_hash set to the plan hash."
+            echo
+            echo "## Before merging (required)"
+            echo "Run the \"Release candidate\" workflow from develop with"
+            echo "source_sha=$SOURCE_SHA and verify_branch=$BRANCH. It must"
+            echo "pass. If \`$BRANCH\` gets any new commit, or main moves,"
+            echo "make a new plan and approve it again."
             echo
             echo "## Approval"
             echo "Opening this pull request is not a release approval. Review"
@@ -179,3 +193,28 @@ jobs:
               echo "::warning::Pull request not created; see the job summary."
             fi
           fi
+
+  check_head:
+    name: Check the release branch (read only)
+    if: github.ref == 'refs/heads/develop' && inputs.verify_branch != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+      - name: Check that the branch holds exactly the candidate
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BRANCH: ${{ inputs.verify_branch }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s' "$BRANCH" | grep -Eq '^release/[0-9a-f]{12}$'
+          python -m tools.prepare_submission verify --source "$SOURCE_SHA" \
+            --head "origin/$BRANCH" --base origin/main \
+            --develop origin/develop | tee -a "$GITHUB_STEP_SUMMARY"

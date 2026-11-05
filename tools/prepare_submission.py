@@ -53,6 +53,17 @@ def git(*args: str, env: dict[str, str] | None = None,
     ).stdout.decode().strip()
 
 
+def tree_entries(commit: str) -> Entries:
+    """Return ``path -> (mode, blob)`` of every file of one commit."""
+    entries: Entries = {}
+    out = subprocess.check_output(["git", "ls-tree", "-rz", commit])
+    for entry in filter(None, out.split(b"\0")):
+        meta, raw = entry.split(b"\t", 1)
+        mode, _, blob = meta.decode().split()
+        entries[raw.decode()] = (mode, blob)
+    return entries
+
+
 def resolve(ref: str) -> str:
     """Return the commit that a ref names."""
     return git(
@@ -84,13 +95,7 @@ class ReleaseCandidate:
 
     def current(self) -> Entries:
         """Return ``path -> (mode, blob)`` of the release branch head."""
-        entries: Entries = {}
-        out = subprocess.check_output(["git", "ls-tree", "-rz", self.base])
-        for entry in filter(None, out.split(b"\0")):
-            meta, raw = entry.split(b"\t", 1)
-            mode, _, blob = meta.decode().split()
-            entries[raw.decode()] = (mode, blob)
-        return entries
+        return tree_entries(self.base)
 
     def plan(self) -> Plan:
         """Describe the change from the release head to the candidate."""
@@ -175,14 +180,29 @@ class ReleaseCandidate:
         }
         commit = git("commit-tree", tree, "-p", self.base, "-m", message,
                      env=env)
-        built: Entries = {}
-        for line in git("ls-tree", "-r", commit).splitlines():
-            meta, path = line.split("\t", 1)
-            mode, _, blob = meta.split()
-            built[path] = (mode, blob)
+        built = tree_entries(commit)
         if built != new:
             raise ValueError("The candidate does not match the selection.")
         return commit
+
+    def verify_head(self, head: str) -> None:
+        """Refuse unless ``head`` is exactly this candidate on top of main.
+
+        Run it just before merging: it shows that the branch still holds the
+        files of the source commit and nothing else, as one commit whose
+        parent is the current head of the release branch.
+        """
+        commit = resolve(head)
+        if tree_entries(commit) != self.candidate():
+            raise ValueError(
+                f"{head} does not hold exactly the candidate of {self.source}"
+            )
+        parents = git("rev-list", "--parents", "-n", "1", commit).split()[1:]
+        if parents != [self.base]:
+            raise ValueError(
+                f"{head} is not one commit on top of the current "
+                f"{self.base}; make a new plan"
+            )
 
 
 def same_candidate(first: str, second: str) -> bool:
@@ -202,13 +222,15 @@ def main() -> int:
     same = sub.add_parser("same")
     same.add_argument("first")
     same.add_argument("second")
-    for name in ("plan", "commit"):
+    for name in ("plan", "commit", "verify"):
         item = sub.add_parser(name)
         item.add_argument("--source", required=True)
         item.add_argument("--base", default="origin/main")
         item.add_argument("--develop", default="origin/develop")
         if name == "plan":
             item.add_argument("--out", type=Path)
+        elif name == "verify":
+            item.add_argument("--head", required=True)
         else:
             item.add_argument("--approve", required=True)
             item.add_argument("--message", required=True)
@@ -219,6 +241,11 @@ def main() -> int:
         release = ReleaseCandidate(args.source, args.base, args.develop)
         if args.command == "commit":
             print(release.build(args.approve, args.message))
+            return 0
+        if args.command == "verify":
+            release.verify_head(args.head)
+            print(f"{args.head} holds exactly the candidate "
+                  f"of {release.source}")
             return 0
         plan = release.plan()
         digest = release.digest(plan)

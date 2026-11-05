@@ -73,8 +73,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         """Read the release workflow and split it into its two jobs."""
         self.text = self.WORKFLOW.read_text()
         self.jobs = self.text.split("\njobs:\n", 1)[1]
-        self.publish = self.jobs.split("\n  publish:\n", 1)[1]
-        self.candidate = self.jobs.split("\n  publish:\n", 1)[0]
+        before, rest = self.jobs.split("\n  publish:\n", 1)
+        self.candidate = before
+        self.publish, self.check = rest.split("\n  check_head:\n", 1)
 
     def test_only_a_manual_trigger(self) -> None:
         """A push or pull request must never start a release."""
@@ -92,7 +93,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         """Only the publish job writes, and only what a release PR needs."""
         self.assertEqual(
             re.findall(r"^  ([\w-]+):$", self.jobs, re.MULTILINE),
-            ["candidate", "publish"],
+            ["candidate", "publish", "check_head"],
         )
         self.assertIn("\npermissions:\n  contents: read\n", self.text)
         self.assertEqual(
@@ -100,6 +101,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ["permissions:", "    permissions:"],
         )
         self.assertNotIn("write", self.candidate)
+        self.assertNotIn("write", self.check)
         self.assertEqual(
             re.findall(r"^      ([\w-]+): write$", self.publish,
                        re.MULTILINE),
@@ -110,7 +112,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_runs_only_for_trusted_develop(self) -> None:
         """Both jobs refuse any ref other than develop."""
         self.assertEqual(
-            self.text.count("github.ref == 'refs/heads/develop'"), 2
+            self.text.count("github.ref == 'refs/heads/develop'"), 3
         )
         self.assertIn("inputs.approved_plan_hash != ''", self.publish)
 
@@ -127,8 +129,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
         """Inputs are passed through env, not pasted into scripts."""
         for line in self.text.splitlines():
             if "${{ inputs." in line:
-                self.assertRegex(line, r"^\s+[A-Z_]+: \$\{\{ inputs\.\w+ \}\}$"
-                                 r"|^    if: .*inputs\.approved_plan_hash")
+                self.assertRegex(
+                    line,
+                    r"^\s+[A-Z_]+: \$\{\{ inputs\.\w+ \}\}$"
+                    r"|^    if: .*inputs\.(approved_plan_hash|verify_branch)",
+                )
 
     def test_never_forces_merges_or_bypasses(self) -> None:
         """No force push, merge, admin override or auto-merge exists."""
@@ -139,3 +144,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         pushes = re.findall(r"push origin (\S+)", self.text)
         self.assertEqual(pushes, ['"${COMMIT}:refs/heads/${BRANCH}"'])
         self.assertEqual(self.text.count("git -c"), 1)
+
+    def test_the_check_job_only_reads(self) -> None:
+        """The pre-merge check validates names and holds no credentials."""
+        self.assertIn("inputs.verify_branch != ''", self.check)
+        self.assertIn("inputs.verify_branch == ''", self.candidate)
+        self.assertIn("release/[0-9a-f]{12}", self.check)
+        self.assertIn("prepare_submission verify", self.check)
+        self.assertNotIn("GH_TOKEN", self.check)
+        self.assertNotIn("push", self.check)
