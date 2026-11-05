@@ -1,0 +1,170 @@
+name: Release candidate
+
+# Manual only. A dry run verifies one develop commit and prints a plan. Only a
+# run that is given the hash of a reviewed plan pushes a new release/* branch
+# and opens a pull request into main. It never merges and never pushes to main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character SHA of the develop commit to release
+        required: true
+        type: string
+      approved_plan_hash:
+        description: Plan hash from a reviewed dry run (empty = dry run)
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: Verify and plan
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      plan_hash: ${{ steps.plan.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+      - name: Plan the candidate (read only)
+        id: plan
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          python -m tools.prepare_submission plan --source "$SOURCE_SHA" \
+            --base origin/main --develop origin/develop \
+            --out "$RUNNER_TEMP/plan"
+          echo "hash=$(cat "$RUNNER_TEMP/plan/plan.hash")" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Release plan"
+            cat "$RUNNER_TEMP/plan/plan.md"
+            echo "To publish, run this workflow again with the same"
+            echo "source_sha and approved_plan_hash set to the plan hash."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check out the source commit
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: git worktree add "$RUNNER_TEMP/source" "$SOURCE_SHA"
+      - name: Install, lint and test the source commit
+        working-directory: ${{ runner.temp }}/source
+        run: make install && make lint && make test
+      - name: Export the candidate
+        working-directory: ${{ runner.temp }}/source
+        run: .venv/bin/python -m tools.export_submission "$RUNNER_TEMP/submission"
+      - name: Lint and verify the exported candidate
+        working-directory: ${{ runner.temp }}/source
+        run: |
+          set -euo pipefail
+          make -C "$RUNNER_TEMP/submission" lint PYTHON="$PWD/.venv/bin/python"
+          .venv/bin/python -m tools.verify_subject "$RUNNER_TEMP/submission"
+
+  publish:
+    name: Open the release pull request
+    needs: candidate
+    if: github.ref == 'refs/heads/develop' && inputs.approved_plan_hash != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.10'
+      - name: Push the candidate branch and open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          APPROVED: ${{ inputs.approved_plan_hash }}
+          CURRENT: ${{ needs.candidate.outputs.plan_hash }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [ "$APPROVED" = "$CURRENT" ] || {
+            echo "The approved plan differs from the current plan." >&2
+            exit 1
+          }
+          BRANCH="release/${SOURCE_SHA:0:12}"
+          OPEN="$(gh pr list --base main --state open --json headRefName \
+            --jq '.[].headRefName | select(startswith("release/"))')"
+          if [ -n "$OPEN" ] && [ "$OPEN" != "$BRANCH" ]; then
+            echo "Another release pull request is open: $OPEN" >&2
+            exit 1
+          fi
+          python -m tools.prepare_submission plan --source "$SOURCE_SHA" \
+            --base origin/main --develop origin/develop \
+            --out "$RUNNER_TEMP/plan"
+          COMMIT="$(python -m tools.prepare_submission commit \
+            --source "$SOURCE_SHA" --base origin/main \
+            --develop origin/develop --approve "$APPROVED" \
+            --message "release: submission candidate from develop $SOURCE_SHA")"
+          AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          GITAUTH=(git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH")
+          REMOTE="$("${GITAUTH[@]}" ls-remote --heads origin "refs/heads/$BRANCH")"
+          if [ -n "$REMOTE" ]; then
+            "${GITAUTH[@]}" fetch origin "refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+            python -m tools.prepare_submission same "$COMMIT" "origin/$BRANCH" || {
+              echo "$BRANCH exists with different content; nothing pushed." >&2
+              exit 1
+            }
+            echo "$BRANCH already holds this candidate; nothing pushed."
+          else
+            "${GITAUTH[@]}" push origin "${COMMIT}:refs/heads/${BRANCH}"
+          fi
+          {
+            echo "## Release candidate"
+            echo
+            echo "- Source (develop) commit: \`$SOURCE_SHA\`"
+            echo "- Release branch: \`$BRANCH\`, candidate commit: \`$COMMIT\`"
+            echo "- Manifest: \`submission-files.txt\` at the source commit"
+            echo
+            cat "$RUNNER_TEMP/plan/plan.md"
+            echo
+            echo "## Verification"
+            echo "Run on the source commit with Python 3.10 in $RUN_URL:"
+            echo "\`make lint\`, \`make test\`, the export of the manifest,"
+            echo "\`make lint\` on the exported tree and \`tools.verify_subject\`"
+            echo "on it passed."
+            echo
+            echo "## Not verified"
+            echo "- The 42 submission repository is not updated."
+            echo "- This pull request was opened with \`GITHUB_TOKEN\`, so the"
+            echo "  usual pull_request workflows do not run on it."
+            echo "- The window (GUI) and maps other than the distributed ones."
+            echo
+            echo "## Regenerate"
+            echo "Run the \"Release candidate\" workflow from develop with"
+            echo "source_sha=$SOURCE_SHA (dry run), then again with"
+            echo "approved_plan_hash set to the plan hash."
+            echo
+            echo "## Approval"
+            echo "Opening this pull request is not a release approval. Review"
+            echo "the diff and merge it yourself (squash), only if it is right."
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$(gh pr list --head "$BRANCH" --base main --state open \
+            --json number --jq length)" = "0" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "release: submission candidate from develop ${SOURCE_SHA:0:12}" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
