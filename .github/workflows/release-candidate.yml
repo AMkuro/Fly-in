@@ -164,7 +164,18 @@ jobs:
           } > "$RUNNER_TEMP/body.md"
           if [ "$(gh pr list --head "$BRANCH" --base main --state open \
             --json number --jq length)" = "0" ]; then
-            gh pr create --base main --head "$BRANCH" \
+            if ! gh pr create --base main --head "$BRANCH" \
               --title "release: submission candidate from develop ${SOURCE_SHA:0:12}" \
-              --body-file "$RUNNER_TEMP/body.md"
+              --body-file "$RUNNER_TEMP/body.md"; then
+              {
+                echo "## Open the pull request by hand"
+                echo "Actions may not create pull requests in this repository."
+                echo "The branch \`$BRANCH\` is pushed. Open:"
+                echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$BRANCH?expand=1"
+                echo "and use this text as the description:"
+                echo
+                cat "$RUNNER_TEMP/body.md"
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning::Pull request not created; see the job summary."
+            fi
           fi
