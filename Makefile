@@ -63,6 +63,10 @@ test:
 		echo "Error: no valid virtualenv found. Run 'make install' first." >&2; \
 		exit 1; \
 	fi; \
+	if [ ! -d tests ]; then \
+		echo "No tests: this checkout has no tests/ directory (tests are not part of the submission)."; \
+		exit 0; \
+	fi; \
 	$(PYTHON) -m unittest discover -s tests -v
 
 lint:
