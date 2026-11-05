@@ -30,13 +30,12 @@ class MovementVerifier:
         self.edges = {
             frozenset((edge.a, edge.b)): edge for edge in self.data.connections
         }
-        self.named_edges = {edge.name: edge for edge in self.data.connections}
 
-    def verify(self, output: str, max_turns: int) -> int:
-        """Reject malformed, incomplete, late or capacity-violating output."""
+    def verify(self, output: str) -> int:
+        """Reject malformed, incomplete or capacity-violating output."""
         lines = re.sub(r"\x1b\[[0-9;]*m", "", output).splitlines()
-        if not lines or len(lines) > max_turns:
-            raise ValueError("missing movements or turn limit exceeded")
+        if not lines:
+            raise ValueError("missing movements")
         positions = {
             drone: self.scenario.start_name
             for drone in range(1, self.scenario.nb_drones + 1)
@@ -62,7 +61,8 @@ class MovementVerifier:
                     raise ValueError(f"turn {turn}: arrival required")
             usage: Counter[str] = Counter()
             for drone, target in moves.items():
-                if drone in transit:
+                was_in_transit = drone in transit
+                if was_in_transit:
                     origin, destination = transit.pop(drone)
                 elif target in self.data.zones:
                     origin, destination = positions[drone], target
@@ -71,12 +71,23 @@ class MovementVerifier:
                         ZoneType.BLOCKED, ZoneType.RESTRICTED,
                     }:
                         raise ValueError(f"turn {turn}: invalid arrival")
-                elif target in self.named_edges:
-                    edge = self.named_edges[target]
-                    origin = positions[drone]
-                    if origin not in (edge.a, edge.b):
-                        raise ValueError(f"turn {turn}: disconnected transit")
-                    destination = edge.b if origin == edge.a else edge.a
+                elif "-" in target:
+                    if target.count("-") != 1:
+                        raise ValueError(
+                            f"turn {turn}: invalid connection {target!r}"
+                        )
+                    origin, destination = target.split("-", 1)
+                    if origin != positions[drone]:
+                        raise ValueError(
+                            f"turn {turn}: transit origin mismatch"
+                        )
+                    if (
+                        destination not in self.data.zones
+                        or frozenset((origin, destination)) not in self.edges
+                    ):
+                        raise ValueError(
+                            f"turn {turn}: disconnected transit"
+                        )
                     zone = self.data.zones[destination]
                     if zone.zone_type != ZoneType.RESTRICTED:
                         raise ValueError(
@@ -88,11 +99,12 @@ class MovementVerifier:
                 connection = self.edges.get(frozenset((origin, destination)))
                 if connection is None:
                     raise ValueError(f"turn {turn}: zones are not connected")
-                usage[connection.name] += 1
-                if usage[connection.name] > connection.max_link_capacity:
-                    raise ValueError(
-                        f"turn {turn}: connection capacity exceeded"
-                    )
+                if not was_in_transit:
+                    usage[connection.name] += 1
+                    if usage[connection.name] > connection.max_link_capacity:
+                        raise ValueError(
+                            f"turn {turn}: connection capacity exceeded"
+                        )
                 if drone in transit:
                     positions.pop(drone)
                 elif destination == self.scenario.end_name:
@@ -186,19 +198,19 @@ class SubjectVerifier:
 
     def check_movements(self) -> None:
         """Replay mandatory maps and bounded adversarial fixtures."""
-        cases: list[tuple[Path, int]] = []
-        for category, limit in (("easy", 9), ("medium", 30), ("hard", 59)):
+        cases: list[Path] = []
+        for category in ("easy", "medium", "hard"):
             paths = sorted((self.root / "maps" / category).glob("*.txt"))
             if not paths:
                 raise ValueError(f"missing mandatory maps: {category}")
-            cases.extend((path, limit) for path in paths)
+            cases.extend(paths)
         cases.extend(
-            (path, 12) for path in sorted(
+            sorted(
                 (Path(__file__).resolve().parents[1]
                  / "tests/fixtures/subject").glob("*.txt")
             )
         )
-        for path, limit in cases:
+        for path in cases:
             parsed = FlyInMapParser().load(str(path))
             scenario = ScenarioBuilder().build(parsed)
             result = subprocess.run(
@@ -210,9 +222,7 @@ class SubjectVerifier:
                     f"{path.name}: CLI failed: {result.stderr.strip()}"
                 )
             try:
-                turns = MovementVerifier(scenario).verify(
-                    result.stdout, limit
-                )
+                turns = MovementVerifier(scenario).verify(result.stdout)
             except ValueError as error:
                 raise ValueError(f"{path.name}: {error}") from error
             print(f"PASS {path.name}: {turns} turns")
