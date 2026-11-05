@@ -1,5 +1,7 @@
 """Check the checker with hand-written valid and invalid movement streams."""
 
+import contextlib
+import io
 import tempfile
 import unittest
 from dataclasses import replace
@@ -253,16 +255,20 @@ class PerformanceReportTests(unittest.TestCase):
             "challenger/01_the_impossible_dream.txt", 53))
         self.assertIn("over 25%", performance_note(
             "challenger/01_the_impossible_dream.txt", 54))
+        self.assertIn("below reference", performance_note(key, 3))
         self.assertEqual(performance_note("subject/mixed_zones.txt", 99), "")
 
 
 class StructureVerifierTests(unittest.TestCase):
-    """Makefile lint flags (III.2) and the unreachable-map report."""
+    """Makefile lint command (III.2), unreachable report, optional map."""
 
-    LINT = (
-        "lint:\n\tpython -m flake8 .\n\tpython -m mypy . "
+    FLAGS = (
         "--warn-return-any --warn-unused-ignores --ignore-missing-imports "
-        "--disallow-untyped-defs --check-untyped-defs\n"
+        "--disallow-untyped-defs --check-untyped-defs"
+    )
+    LINT = (
+        f"PY = python\nCHECK = flake8\n\nlint:\n\t$(PY) -m $(CHECK) .\n"
+        f"\t$(PY) -m mypy . \\\n\t\t{FLAGS}\n"
         "\nlint-strict:\n\tflake8 .\n\tmypy . --strict\n"
     )
 
@@ -273,49 +279,88 @@ class StructureVerifierTests(unittest.TestCase):
             (root / "Makefile").write_text(makefile)
             SubjectVerifier(root).check_lint_rule()
 
-    def test_lint_rule_with_all_flags_is_valid(self) -> None:
-        """Accept the exact Subject command, even with later rules."""
+    def test_lint_rule_is_judged_on_expanded_commands(self) -> None:
+        """Variables and continuations are fine; the real command counts."""
         self.lint(self.LINT)
-        self.lint(self.LINT.replace("python -m mypy .", "mypy .\\\n\t"))
+        self.lint(self.LINT.replace("$(PY) -m $(CHECK) .", "flake8 ."))
 
-    def test_lint_rule_missing_pieces_is_rejected(self) -> None:
-        """Reject each missing flag; lint-strict must not satisfy lint."""
-        for flag in (
-            "--warn-return-any", "--warn-unused-ignores",
-            "--ignore-missing-imports", "--disallow-untyped-defs",
-            "--check-untyped-defs",
+    def test_lint_rule_that_does_not_run_the_tools_is_rejected(self) -> None:
+        """Quoting, comments and lint-strict must not satisfy `lint`."""
+        for old, new in (
+            ("$(PY) -m $(CHECK) .", 'echo "flake8 ."'),
+            ("$(PY) -m $(CHECK) .", "# flake8 ."),
+            ("$(PY) -m $(CHECK) .", "$(PY) -m $(CHECK)"),
+            ("$(PY) -m mypy .", 'printf "mypy ."'),
         ):
-            with self.subTest(flag=flag), self.assertRaisesRegex(
-                ValueError, "lint rule lacks"
+            with self.subTest(new=new), self.assertRaisesRegex(
+                ValueError, "does not run"
             ):
-                self.lint(self.LINT.replace(flag, "", 1))
-        with self.assertRaises(ValueError):
-            self.lint(self.LINT.replace("flake8 .", "flake8", 1))
+                self.lint(self.LINT.replace(old, new, 1))
         with self.assertRaises(ValueError):
             self.lint("lint:\n\ttrue\n\nlint-strict:\n\tmypy . --strict\n")
+        with self.assertRaisesRegex(ValueError, "make -n lint failed"):
+            self.lint("other:\n\ttrue\n")
 
-    def unreachable(self, script: str) -> None:
+    def test_lint_rule_missing_flag_is_rejected(self) -> None:
+        """Reject each missing mypy flag."""
+        for flag in self.FLAGS.split():
+            with self.subTest(flag=flag), self.assertRaisesRegex(
+                ValueError, "lacks mypy flag"
+            ):
+                self.lint(self.LINT.replace(flag, "", 1))
+
+    def unreachable(
+        self, script: str, fixtures: Path | None = None
+    ) -> None:
         """Run the check against a stub CLI instead of the real one."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "fly-in.py").write_text(script)
-            SubjectVerifier(root).check_unreachable()
+            SubjectVerifier(root).check_unreachable(fixtures)
 
     def test_unreachable_report_is_required(self) -> None:
-        """Accept only exit 1 with the DEC-013 stderr line."""
+        """Accept only exit 1, the DEC-013 stderr line and empty stdout."""
         stub = (
-            "import sys\n"
+            "import sys\nprint({out!r})\n"
             "print({msg!r}, file=sys.stderr)\nsys.exit({code})\n"
         )
         good = "Error: No path from start to end."
-        self.unreachable(stub.format(msg=good, code=1))
-        for msg, code in ((good, 0), (good, 2), ("boom", 1), ("", 1)):
-            with self.subTest(msg=msg, code=code), self.assertRaises(
-                ValueError
+        self.unreachable(stub.format(out="", msg=good, code=1))
+        for out, msg, code in (
+            ("", good, 0), ("", good, 2), ("", "boom", 1), ("", "", 1),
+            ("D1-x", good, 1),
+        ):
+            with self.subTest(out=out, msg=msg, code=code), (
+                self.assertRaises(ValueError)
             ):
-                self.unreachable(stub.format(msg=msg, code=code))
+                self.unreachable(stub.format(out=out, msg=msg, code=code))
+
+    def test_missing_unreachable_fixture_fails(self) -> None:
+        """An empty fixture directory must not pass silently."""
+        with tempfile.TemporaryDirectory() as empty, self.assertRaisesRegex(
+            ValueError, "missing unreachable fixtures"
+        ):
+            self.unreachable("", Path(empty))
 
     def test_real_cli_reports_unreachable(self) -> None:
         """Integration: the shipped CLI satisfies the DEC-013 contract."""
         SubjectVerifier(Path(__file__).resolve().parents[1]
                         ).check_unreachable()
+
+    def test_challenger_is_optional(self) -> None:
+        """A broken Challenger run warns and is not a mandatory case."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            maps = root / "maps"
+            for category in ("easy", "medium", "hard", "challenger"):
+                (maps / category).mkdir(parents=True)
+                (maps / category / "x.txt").write_text("not a map\n")
+            (root / "fly-in.py").write_text("raise SystemExit(1)\n")
+            verifier = SubjectVerifier(root)
+            names = {path.parent.name for path in verifier.mandatory_cases()}
+            self.assertNotIn("challenger", names)
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                verifier.check_challenger()
+            self.assertIn("WARN optional x.txt", out.getvalue())
+            with self.assertRaises(ValueError):
+                verifier.check_movements()

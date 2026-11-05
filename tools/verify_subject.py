@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import shlex
 import subprocess
 import sys
 from collections import Counter
@@ -35,11 +36,39 @@ OPTIMUM_TURNS: dict[str, int] = {
     "challenger/01_the_impossible_dream.txt": 43,
 }
 UNREACHABLE_MESSAGE = "Error: No path from start to end."
-LINT_REQUIRED = (
-    r"flake8\s+\.", r"mypy\s+\.", "--warn-return-any",
-    "--warn-unused-ignores", "--ignore-missing-imports",
+LINT_FLAGS = (
+    "--warn-return-any", "--warn-unused-ignores", "--ignore-missing-imports",
     "--disallow-untyped-defs", "--check-untyped-defs",
 )
+NON_EXECUTING = {"echo", "printf", "true", ":", "#"}
+
+
+def make_commands(expanded: str) -> list[list[str]]:
+    """Split ``make -n`` output into command token lists.
+
+    Commands that only print (``echo`` ...) are dropped, so quoting
+    ``flake8 .`` in a message does not count as running it.
+    """
+    commands: list[list[str]] = []
+    for part in re.split(r";|&&|\|\||\n", expanded.replace("\\\n", " ")):
+        try:
+            tokens = shlex.split(part)
+        except ValueError:
+            continue
+        if tokens and tokens[0] not in NON_EXECUTING:
+            commands.append(tokens)
+    return commands
+
+
+def runs_tool(commands: list[list[str]], tool: str) -> list[str] | None:
+    """Return the first command that runs ``tool .``, if any."""
+    for tokens in commands:
+        for i, token in enumerate(tokens[:-1]):
+            if (
+                token == tool or token.endswith("/" + tool)
+            ) and tokens[i + 1] == ".":
+                return tokens
+    return None
 
 
 def performance_note(key: str, turns: int) -> str:
@@ -50,7 +79,9 @@ def performance_note(key: str, turns: int) -> str:
     optimum = OPTIMUM_TURNS.get(key)
     if optimum is None:
         return ""
-    if turns == optimum:
+    if turns < optimum:
+        status = "below reference optimum, investigate"
+    elif turns == optimum:
         status = "optimal"
     elif turns * 4 <= optimum * 5:
         status = "within 25%"
@@ -169,20 +200,25 @@ class SubjectVerifier:
         """Keep candidate execution isolated from development helpers."""
         self.root = root.resolve()
 
-    def check_structure(self) -> None:
-        """Check files, README content, docstrings and graph imports."""
+    def check_files(self) -> None:
+        """Check that the required root files exist."""
         for filename in (
             "Makefile", "README.md", "requirements.txt", "fly-in.py",
             ".gitignore", ".flake8",
         ):
             if not (self.root / filename).is_file():
                 raise ValueError(f"missing root file: {filename}")
-        self.check_readme()
+
+    def check_makefile(self) -> None:
+        """Check the mandatory Makefile rules and the lint command."""
         makefile = (self.root / "Makefile").read_text()
         for rule in ("install", "run", "debug", "clean", "lint"):
             if re.search(rf"(?m)^{rule}:", makefile) is None:
                 raise ValueError(f"missing Makefile rule: {rule}")
         self.check_lint_rule()
+
+    def check_sources(self) -> None:
+        """Check docstrings and forbidden graph imports."""
         forbidden = {
             "graphlib", "networkx", "igraph", "networkit", "rustworkx",
             "graph_tool", "scipy",
@@ -210,39 +246,52 @@ class SubjectVerifier:
                     raise ValueError(f"forbidden graph library: {path}")
 
     def check_lint_rule(self) -> None:
-        """Require the Subject III.2 flake8/mypy command in the lint rule."""
-        recipe: list[str] = []
-        inside = False
-        for line in (self.root / "Makefile").read_text().splitlines():
-            if line.startswith("lint:"):
-                inside = True
-            elif inside and line and not line[0].isspace():
-                break
-            elif inside:
-                recipe.append(line)
-        text = "\n".join(recipe)
-        for required in LINT_REQUIRED:
-            if re.search(required, text) is None:
-                raise ValueError(f"lint rule lacks: {required}")
+        """Require the Subject III.2 commands in what ``make lint`` runs.
 
-    def check_unreachable(self) -> None:
-        """Require the DEC-013 report for a map with no start-end path."""
-        fixtures = (
-            Path(__file__).resolve().parents[1]
-            / "tests/fixtures/unreachable"
+        ``make -n`` expands variables and line continuations, so this sees
+        the real command lines. Limit: it cannot prove the build fails when
+        a tool reports errors (``|| true``, a skipped branch); the CI run of
+        the real ``make lint`` is the authority for that.
+        """
+        result = subprocess.run(
+            ["make", "-n", "lint", f"PYTHON={sys.executable}"],
+            cwd=self.root, capture_output=True, text=True, timeout=20,
         )
-        for path in sorted(fixtures.glob("*.txt")):
+        if result.returncode:
+            raise ValueError(f"make -n lint failed: {result.stderr.strip()}")
+        commands = make_commands(result.stdout)
+        if runs_tool(commands, "flake8") is None:
+            raise ValueError("lint rule does not run: flake8 .")
+        mypy = runs_tool(commands, "mypy")
+        if mypy is None:
+            raise ValueError("lint rule does not run: mypy .")
+        for flag in LINT_FLAGS:
+            if flag not in mypy:
+                raise ValueError(f"lint rule lacks mypy flag: {flag}")
+
+    def check_unreachable(self, fixtures: Path | None = None) -> None:
+        """Require the DEC-013 report for a map with no start-end path."""
+        directory = fixtures or (
+            Path(__file__).resolve().parents[1] / "tests/fixtures/unreachable"
+        )
+        paths = sorted(directory.glob("*.txt"))
+        if not paths:
+            raise ValueError(f"missing unreachable fixtures: {directory}")
+        for path in paths:
             result = subprocess.run(
                 [sys.executable, str(self.root / "fly-in.py"), str(path)],
                 cwd=self.root, capture_output=True, text=True, timeout=20,
             )
-            if result.returncode != 1 or (
-                result.stderr.strip() != UNREACHABLE_MESSAGE
+            if (
+                result.returncode != 1
+                or result.stderr.strip() != UNREACHABLE_MESSAGE
+                or result.stdout.strip()
             ):
                 raise ValueError(
-                    f"{path.name}: expected exit 1 with "
-                    f"{UNREACHABLE_MESSAGE!r}, got {result.returncode} "
-                    f"{result.stderr.strip()!r}"
+                    f"{path.name}: expected exit 1, stderr "
+                    f"{UNREACHABLE_MESSAGE!r} and empty stdout, got "
+                    f"{result.returncode} {result.stderr.strip()!r} "
+                    f"{result.stdout.strip()[:40]!r}"
                 )
             print(f"PASS {path.name}: unreachable reported")
 
@@ -273,39 +322,58 @@ class SubjectVerifier:
         if "### AI Usage" not in readme:
             raise ValueError("missing AI usage disclosure")
 
-    def check_movements(self) -> None:
-        """Replay mandatory maps and bounded adversarial fixtures."""
+    def mandatory_cases(self) -> list[Path]:
+        """List the mandatory maps and the bounded adversarial fixtures."""
         cases: list[Path] = []
         for category in ("easy", "medium", "hard"):
             paths = sorted((self.root / "maps" / category).glob("*.txt"))
             if not paths:
                 raise ValueError(f"missing mandatory maps: {category}")
             cases.extend(paths)
-        # Optional Challenger map (Subject IX): replayed when shipped.
-        cases.extend(sorted((self.root / "maps" / "challenger").glob("*.txt")))
         cases.extend(
             sorted(
                 (Path(__file__).resolve().parents[1]
                  / "tests/fixtures/subject").glob("*.txt")
             )
         )
-        for path in cases:
-            parsed = FlyInMapParser().load(str(path))
-            scenario = ScenarioBuilder().build(parsed)
-            result = subprocess.run(
-                [sys.executable, str(self.root / "fly-in.py"), str(path)],
-                cwd=self.root, capture_output=True, text=True, timeout=20,
+        return cases
+
+    def replay(self, path: Path) -> int:
+        """Run the CLI on one map and return its verified turn count."""
+        parsed = FlyInMapParser().load(str(path))
+        scenario = ScenarioBuilder().build(parsed)
+        result = subprocess.run(
+            [sys.executable, str(self.root / "fly-in.py"), str(path)],
+            cwd=self.root, capture_output=True, text=True, timeout=20,
+        )
+        if result.returncode:
+            raise ValueError(
+                f"{path.name}: CLI failed: {result.stderr.strip()}"
             )
-            if result.returncode:
-                raise ValueError(
-                    f"{path.name}: CLI failed: {result.stderr.strip()}"
-                )
+        try:
+            turns = MovementVerifier(scenario).verify(result.stdout)
+        except ValueError as error:
+            raise ValueError(f"{path.name}: {error}") from error
+        note = performance_note(f"{path.parent.name}/{path.name}", turns)
+        print(f"PASS {path.name}: {turns} turns{note}")
+        return turns
+
+    def check_movements(self) -> None:
+        """Replay mandatory maps and bounded adversarial fixtures."""
+        for path in self.mandatory_cases():
+            self.replay(path)
+
+    def check_challenger(self) -> None:
+        """Replay the optional Challenger map (Subject IX); never fails.
+
+        The map is a bonus, so any problem is reported as a warning and
+        must not turn the mandatory gate red.
+        """
+        for path in sorted((self.root / "maps" / "challenger").glob("*.txt")):
             try:
-                turns = MovementVerifier(scenario).verify(result.stdout)
-            except ValueError as error:
-                raise ValueError(f"{path.name}: {error}") from error
-            note = performance_note(f"{path.parent.name}/{path.name}", turns)
-            print(f"PASS {path.name}: {turns} turns{note}")
+                self.replay(path)
+            except Exception as error:  # optional: report, do not gate
+                print(f"WARN optional {path.name}: {error}")
 
 
 def main() -> int:
@@ -316,7 +384,9 @@ def main() -> int:
     verifier = SubjectVerifier(args.candidate)
     failed = False
     for check in (
-        verifier.check_structure, verifier.check_movements,
+        verifier.check_files, verifier.check_readme,
+        verifier.check_makefile, verifier.check_sources,
+        verifier.check_movements, verifier.check_challenger,
         verifier.check_unreachable,
     ):
         try:
