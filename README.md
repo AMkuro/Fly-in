@@ -162,9 +162,11 @@ dashes nor spaces. Coordinates are integers. A connection links two zones
 declared before it, and the same connection (`a-b` and `b-a`) must not
 appear twice. Zone types are limited to the four above, and an invalid type
 is an error. `max_drones` and `max_link_capacity` are positive integers.
-`max_drones` on the start or end zone is accepted and ignored, because these
-two zones have no limit. A map whose end cannot be reached is valid syntax,
-but the program reports it and stops.
+The start and end zones have no capacity limit, so a valid (positive)
+`max_drones` written on them is accepted and ignored. The value is still
+checked like any other: `max_drones=0` or a negative value is an error on
+every zone, including these two. A map whose end cannot be reached is valid
+syntax, but the program reports it and stops.
 
 **Restrictions of this implementation.** The subject does not require the
 following, and they may reject maps that the subject would allow:
