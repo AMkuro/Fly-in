@@ -12,6 +12,12 @@ class MapParseError(ValueError):
     def __init__(
         self, line_number: int | None, message: str | ValueError
     ) -> None:
+        """Build the message, prefixed with the line number when known.
+
+        Args:
+            line_number: Physical line of the error, or None if absent.
+            message: Error text, or a pydantic error to be described.
+        """
         if isinstance(message, ValidationError):
             message = self.describe(message)
         prefix = "" if line_number is None else f"line {line_number}: "
