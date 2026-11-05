@@ -9,6 +9,7 @@ from __future__ import annotations
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
+from typing import cast
 
 
 class PlaybackControls(ttk.Frame):
@@ -92,8 +93,20 @@ class PlaybackControls(ttk.Frame):
     def set_playing(self, playing: bool) -> None:
         """Enable only Pause while playing, and the other buttons otherwise."""
         idle = ["disabled"] if playing else ["!disabled"]
-        self._continue_button.state(idle)
-        self._step_button.state(idle)
-        self._back_button.state(idle)
-        self._restart_button.state(idle)
-        self._pause_button.state(["!disabled"] if playing else ["disabled"])
+        self._set_state(self._continue_button, idle)
+        self._set_state(self._step_button, idle)
+        self._set_state(self._back_button, idle)
+        self._set_state(self._restart_button, idle)
+        self._set_state(
+            self._pause_button,
+            ["!disabled"] if playing else ["disabled"],
+        )
+
+    @staticmethod
+    def _set_state(button: ttk.Button, flags: list[str]) -> None:
+        """Set the ttk state flags of a button.
+
+        Older ``typeshed`` versions leave ``Widget.state`` untyped, which
+        ``mypy --strict`` rejects, so the call goes through a typed alias.
+        """
+        cast(Callable[[list[str]], object], button.state)(flags)
