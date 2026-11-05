@@ -129,7 +129,8 @@ checkout.
 
 ### Map file format
 
-A map is a UTF-8 text file. Each meaningful line is `<key>: <value>`.
+A map file **must be** a UTF-8 text file (plain ASCII is valid UTF-8). Any
+other encoding cannot be read. Each meaningful line is `<key>: <value>`.
 
 ```text
 nb_drones: 5
@@ -168,7 +169,8 @@ but the program reports it and stops.
 **Restrictions of this implementation.** The subject does not require the
 following, and they may reject maps that the subject would allow:
 
-- *UTF-8.* A file that cannot be decoded as UTF-8 is rejected with a
+- *UTF-8.* The file must be saved as UTF-8. A file that cannot be decoded as
+  UTF-8 is rejected with a
   file-level message (file path and cause, no line number).
 - *Coordinate uniqueness.* Two different zones, including the start and end
   zones, must not share the same `(x, y)`. We chose this because the map is
