@@ -125,8 +125,9 @@ make clean    # removes __pycache__, .mypy_cache and similar caches
 
 `make lint-strict` runs `flake8 .` and `mypy . --strict`. The unit tests
 live in the `tests/` directory of the development repository and are not
-part of the submitted files, so `make test` only works in a development
-checkout.
+part of the submitted files. Without a `tests/` directory, `make test` prints
+`No tests: this checkout has no tests/ directory (tests are not part of the
+submission).` and exits with code 0.
 
 ### Map file format
 
