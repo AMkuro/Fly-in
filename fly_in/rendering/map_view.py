@@ -1,6 +1,6 @@
 """Canvas-based static map view for Fly-in map data.
 
-This module is the place for drawing zones and connections from ``MapData``.
+This module is the place for drawing zones and connections from ``Scenario``.
 It should render facts supplied by the parser or future simulation snapshots;
 it must not decide movement validity, capacity validity, or routes.
 """
@@ -8,13 +8,18 @@ it must not decide movement validity, capacity validity, or routes.
 from __future__ import annotations
 
 import tkinter as tk
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from tkinter import ttk
+from typing import Literal
 
-from fly_in.model.map_data import Connection, MapData, Zone, ZoneType
+from fly_in.model.connection_model import Connection
+from fly_in.model.scenario import Scenario
+from fly_in.model.zone_model import Zone, ZoneType
 from fly_in.rendering.color_resolver import ColorResolver
 from fly_in.rendering.display_style import DisplayStyle
+from fly_in.rendering.drone_markers import MARKER_TAG, DroneMarkerDrawer
+from fly_in.rendering.turn_occupancy import TurnOccupancy
 from fly_in.rendering.viewport import MapBounds, Viewport
 
 
@@ -58,12 +63,12 @@ class MapView(ttk.Frame):
     def __init__(
         self,
         parent: tk.Misc,
-        map_data: MapData,
+        scenario: Scenario,
         on_hover: Callable[[InspectTarget | None], None],
     ) -> None:
         """Create the Canvas container for a parsed map."""
         super().__init__(parent)
-        self._map_data = map_data
+        self._scenario = scenario
         self._style = DisplayStyle()
         self._viewport = Viewport(margin=self._style.map_margin)
         self._on_hover = on_hover
@@ -71,12 +76,14 @@ class MapView(ttk.Frame):
         self._hovered_target: InspectTarget | None = None
         self._highlighted_target: InspectTarget | None = None
         self._last_canvas_size: tuple[int, int] | None = None
+        self._occupancy: TurnOccupancy | None = None
 
         self._canvas = tk.Canvas(
             self,
             background=self._style.canvas_background,
             highlightthickness=0,
         )
+        self._markers = DroneMarkerDrawer(self._canvas, self._style)
         self._color_resolver = ColorResolver(
             self._canvas, default_color=self._style.default_zone_color
         )
@@ -88,22 +95,22 @@ class MapView(ttk.Frame):
         self.columnconfigure(0, weight=1)
 
     def render_map(self) -> None:
-        """Redraw the complete static map."""
+        """Redraw the map, with the current turn's drones if one is set."""
         self._canvas.delete("all")
         self._target_items.clear()
         self._hovered_target = None
         self._highlighted_target = None
 
-        zones = list(self._map_data.zones.values())
+        zones = list(self._scenario.graph.zones.values())
         self._fit_viewport(zones)
-        self._draw_graph(zones, self._map_data.connections)
+        self._draw_graph(zones, self._scenario.graph.connections)
 
-    def show_snapshot(self, snapshot: object) -> None:
-        """Display a future simulation snapshot on top of the static map.
+    def show_snapshot(self, occupancy: TurnOccupancy) -> None:
+        """Draw one confirmed turn state ``S_t`` on top of the map.
 
-        Snapshot-specific drawing is not available yet, so the current GUI
-        falls back to the validated static network view.
+        The occupancy is kept so a window resize redraws the same turn.
         """
+        self._occupancy = occupancy
         self.render_map()
 
     def _fit_viewport(self, zones: list[Zone]) -> None:
@@ -126,7 +133,7 @@ class MapView(ttk.Frame):
         )
 
     def _draw_graph(
-        self, zones: list[Zone], connections: list[Connection]
+        self, zones: list[Zone], connections: Sequence[Connection]
     ) -> None:
         """Draw the static map using one canvas-coordinate pass per zone."""
         zone_points = self._canvas_points_for(zones)
@@ -135,6 +142,43 @@ class MapView(ttk.Frame):
         for zone in zones:
             self._draw_zone(zone, zone_points[zone.name])
         self._raise_zone_layer()
+        self._draw_drones(zones, connections, zone_points)
+
+    def _draw_drones(
+        self,
+        zones: list[Zone],
+        connections: Sequence[Connection],
+        zone_points: dict[str, CanvasPoint],
+    ) -> None:
+        """Draw markers for the current turn above every other item."""
+        if self._occupancy is None:
+            return
+        for zone in zones:
+            point = zone_points[zone.name]
+            self._markers.draw_in_zone(
+                point.x,
+                point.y,
+                self._occupancy.zone_ids(zone.name),
+                self._target_tags("zone", zone.name),
+                arrived=zone.name == self._scenario.end_name,
+            )
+        for connection in connections:
+            start = zone_points[connection.a]
+            end = zone_points[connection.b]
+            self._markers.draw_on_connection(
+                (start.x, start.y),
+                (end.x, end.y),
+                self._occupancy.connection_ids(connection.name),
+                self._target_tags("connection", connection.name),
+            )
+        self._canvas.tag_raise(MARKER_TAG)
+
+    def _usage_text(
+        self, drone_ids: tuple[int, ...] | None, limit: int
+    ) -> str:
+        """Return ``cap used/limit``; ``X`` while no turn is displayed."""
+        used = "X" if drone_ids is None else str(len(drone_ids))
+        return f"cap {used}/{limit}"
 
     def _canvas_points_for(self, zones: list[Zone]) -> dict[str, CanvasPoint]:
         """Convert every zone position to Canvas coordinates once."""
@@ -164,7 +208,12 @@ class MapView(ttk.Frame):
         self._draw_label(
             label_x,
             label_y,
-            text=f"cap X/{connection.max_link_capacity}",
+            text=self._usage_text(
+                None
+                if self._occupancy is None
+                else self._occupancy.connection_ids(connection.name),
+                connection.max_link_capacity,
+            ),
             fill=self._style.connection_label_color,
             font=("TkDefaultFont", 9),
             tags=tags,
@@ -228,21 +277,16 @@ class MapView(ttk.Frame):
         tags: tuple[str, str],
     ) -> int:
         """Create the main zone circle with type-specific outline options."""
-        options: dict[str, object] = {
-            "fill": fill,
-            "outline": outline,
-            "width": width,
-            "tags": tags,
-        }
-        dash = self._zone_outline_dash(zone)
-        if dash is not None:
-            options["dash"] = dash
         return self._canvas.create_oval(
             center.x - radius,
             center.y - radius,
             center.x + radius,
             center.y + radius,
-            **options,
+            fill=fill,
+            outline=outline,
+            width=width,
+            tags=tags,
+            dash=self._zone_outline_dash(zone) or (),
         )
 
     def _draw_priority_inner_outline(
@@ -276,7 +320,12 @@ class MapView(ttk.Frame):
         self._draw_label(
             center.x,
             center.y - radius - self._style.zone_capacity_label_gap,
-            text=f"cap X/{zone.max_drones}",
+            text=self._usage_text(
+                None
+                if self._occupancy is None
+                else self._occupancy.zone_ids(zone.name),
+                zone.max_drones,
+            ),
             fill=self._style.zone_label_color,
             font=("TkDefaultFont", self._style.zone_detail_label_font_size),
             tags=tags,
@@ -311,9 +360,9 @@ class MapView(ttk.Frame):
         y: float,
         text: str,
         fill: str,
-        font: tuple[object, ...],
+        font: tuple[str, int] | tuple[str, int, str],
         tags: tuple[str, str],
-        anchor: str = "center",
+        anchor: Literal["center", "n", "s"] = "center",
     ) -> None:
         """Draw a label with a dark outline for readability."""
         label_tags = (*tags, "label")
@@ -403,8 +452,8 @@ class MapView(ttk.Frame):
     def _is_start_or_end(self, zone: Zone) -> bool:
         """Return whether ``zone`` is one of the two special hubs."""
         return zone.name in {
-            self._map_data.start_hub_name,
-            self._map_data.end_hub_name,
+            self._scenario.start_name,
+            self._scenario.end_name,
         }
 
     @staticmethod
@@ -470,7 +519,7 @@ class MapView(ttk.Frame):
         """Apply or remove hover styling for one target."""
         item_ids = self._target_items.get(target, ())
         if target.kind == "zone":
-            zone = self._map_data.zones.get(target.identifier)
+            zone = self._scenario.graph.zones.get(target.identifier)
             outline = self._style.hover_outline_color
             width = self._style.highlighted_outline_width
             if not highlighted and zone is not None:
