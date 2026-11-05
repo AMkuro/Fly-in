@@ -170,8 +170,8 @@ but the program reports it and stops.
 following, and they may reject maps that the subject would allow:
 
 - *UTF-8.* The file must be saved as UTF-8. A file that cannot be decoded as
-  UTF-8 is rejected with a
-  file-level message (file path and cause, no line number).
+  UTF-8 is rejected with a file-level message (file path and cause, no line
+  number).
 - *Coordinate uniqueness.* Two different zones, including the start and end
   zones, must not share the same `(x, y)`. We chose this because the map is
   drawn in two dimensions and each coordinate pair is treated as one
