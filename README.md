@@ -251,6 +251,29 @@ rules are counted on these states:
   another drone may start crossing the same connection on that turn. Both
   directions are counted together, because a connection is shared.
 
+As formulas, for every turn `t`:
+
+```text
+Zone z (other than start and end):
+    O_z(t+1) = O_z(t) − D_z(t) + A_z(t)                  0 ≤ O_z(t+1) ≤ C_z
+Connection e:
+    U_e(t)   = B_e(t) − F_e(t) + S_e(t) + N_e(t)         0 ≤ U_e(t)   ≤ C_e
+```
+
+- `O_z(t)`: drones standing in `z` in `S_t`. `D_z(t)` and `A_z(t)`: drones
+  that leave `z` and drones that arrive in `z` during turn `t`. `C_z` is
+  `max_drones`.
+- `B_e(t)`: drones on `e` at the start of turn `t` (restricted crossings in
+  progress). `F_e(t)`: those that leave `e` in turn `t`. `S_e(t)`: drones that
+  start a restricted crossing of `e` in turn `t`. `N_e(t)`: drones that use `e`
+  for a normal move in turn `t`, in both directions together. `C_e` is
+  `max_link_capacity`.
+- Every drone on a connection must arrive on the next turn, so `B_e(t) =
+  F_e(t)` and the condition reduces to `S_e(t) + N_e(t) ≤ C_e`. This sum is
+  what `Reservation` and `Simulator` count. The forced arrival of each
+  individual drone is checked separately by `MovementRules`, and is not
+  skipped because of this reduction.
+
 A restricted crossing is the pair `InTransit(a, b)` followed by `AtZone(b)`.
 `MovementRules` allows no other successor of `InTransit`, so a drone can never
 wait on the connection. The destination zone must have room at the moment of
@@ -329,6 +352,48 @@ adds the already reserved use of every zone and connection that a path uses to
 the tie-break score, which spreads drones over parallel routes when two
 routes arrive equally early. The deadline `U − 1` and the early stop are what
 prevent the search from running for an unbounded time.
+
+### Bounds on the number of turns
+
+Let `K` be the number of drones, `d(z)` the static distance of Step 1, and
+`L = d(start)`. The scheduler works inside these bounds:
+
+```text
+lower bound            LB  = L = d(start)
+fallback plan          U_0 = K · L
+best makespan so far   U   starts at U_0 and never increases       LB ≤ U ≤ K · L
+deadline of an attempt     = U − 1
+stop                   when U = LB, or after 8 attempts
+```
+
+- **Lower bound.** One drone alone needs at least `d(start)` turns, and other
+  drones only add constraints, so no plan can finish earlier. The bound ignores
+  all capacities, so it is usually not reachable. The program stops early when
+  `U = LB`, which means that `U` is optimal.
+- **Upper bound.** In the fallback plan, drone `k` (from 0) leaves at turn
+  `k·L` and arrives at turn `(k+1)·L`, so the last drone arrives at turn
+  `K·L`. This plan is always legal, so a legal plan with `U ≤ K·L` always exists
+  when the end is reachable.
+- **Deadline.** An attempt must finish every drone by turn `U − 1`, so a
+  successful attempt lowers `U` by at least 1. The planner discards a node as
+  soon as `t + 1 + h` (current turn plus the optimistic remaining turns)
+  exceeds the deadline.
+- **When it matters.** For `K = 1` we have `LB = U_0`, so no search is run.
+  On the ten distributed maps `LB` is below the result (see the table in
+  [Performance and Limitations](#performance-and-limitations)), so the early
+  stop never fires there and all 8 attempts are used.
+
+The program does not compute any bound based on capacity. Such a bound exists
+and shows how far `LB` can be from the optimum. If every route must cross one
+connection of capacity `c`, at most `c` drones can cross it per turn, so
+`makespan ≥ d_e + ⌈K / c⌉ − 1`, where `d_e` is the fewest turns of a route
+through that connection. In `maps/hard/01_maze_nightmare.txt` every route
+crosses the connection `maze_c2-bottleneck` (capacity 1), with `K = 8` and
+`d_e = 6`, giving `6 + 8 − 1 = 13`, the optimum of the subject. For the
+Challenger map the subject gives the same kind of argument: the exit chain lets
+at most one drone finish per turn, so the optimum is `19 + (25 − 1) = 43`.
+These are explanations of why the optima are what they are; the scheduler does
+not use them.
 
 ### Step 6: the simulator and the output
 
@@ -511,18 +576,21 @@ separately from correctness. The table compares the optimum of the subject
 (section VII.6 and the bonus in section IX) with the number of turns of the
 plans printed by this program.
 
-| Map | Drones | Optimum | Turns obtained |
-|---|---|---|---|
-| easy / 01 linear path | 2 | 4 | 4 |
-| easy / 02 simple fork | 4 | 4 | 4 |
-| easy / 03 basic capacity | 4 | 4 | 4 |
-| medium / 01 dead end trap | 5 | 8 | 8 |
-| medium / 02 circular loop | 6 | 10 | 10 |
-| medium / 03 priority puzzle | 5 | 6 | 6 |
-| hard / 01 maze nightmare | 8 | 13 | 13 |
-| hard / 02 capacity hell | 12 | 16 | 16 |
-| hard / 03 ultimate challenge | 15 | 26 | 26 |
-| challenger / 01 the impossible dream (optional) | 25 | 43 | 43 |
+| Map | Drones `K` | `LB = d(start)` | Fallback `K·L` | Optimum | Turns obtained |
+|---|---|---|---|---|---|
+| easy / 01 linear path | 2 | 3 | 6 | 4 | 4 |
+| easy / 02 simple fork | 4 | 3 | 12 | 4 | 4 |
+| easy / 03 basic capacity | 4 | 3 | 12 | 4 | 4 |
+| medium / 01 dead end trap | 5 | 4 | 20 | 8 | 8 |
+| medium / 02 circular loop | 6 | 5 | 30 | 10 | 10 |
+| medium / 03 priority puzzle | 5 | 4 | 20 | 6 | 6 |
+| hard / 01 maze nightmare | 8 | 6 | 48 | 13 | 13 |
+| hard / 02 capacity hell | 12 | 5 | 60 | 16 | 16 |
+| hard / 03 ultimate challenge | 15 | 12 | 180 | 26 | 26 |
+| challenger / 01 the impossible dream (optional) | 25 | 19 | 475 | 43 | 43 |
+
+`LB` and `K·L` are the bounds of [Bounds on the number of turns](#bounds-on-the-number-of-turns),
+computed by the program for each map.
 
 The turn counts were measured on commit `b5bca91` by replaying the printed
 output with a separate checker that applies the subject's movement and
