@@ -95,8 +95,9 @@ is printed to the standard output. See [Visual Representation](#visual-represent
 
 ### Errors and exit codes
 
-All errors are printed on the standard error output; nothing is printed on
-the standard output unless a complete, verified plan exists.
+All errors are printed on the standard error output. The lines of a plan are
+printed on the standard output only after the complete plan has been verified,
+so an error never leaves a partial plan on the output.
 
 | Situation | Message | Exit code |
 |---|---|---|
@@ -105,7 +106,7 @@ the standard output unless a complete, verified plan exists.
 | The end zone cannot be reached from the start zone | `Error: No path from start to end.` | 1 |
 | The scheduled plan fails the final simulation check (internal consistency failure) | `Configuration error: <cause>` | 1 |
 | Wrong command-line usage | the `argparse` usage message | 2 |
-| Interrupted with Ctrl+C | an empty line | 0 |
+| Interrupted with Ctrl+C | an empty line on the standard output | 0 |
 
 For example, `zone=lava` produces
 `Configuration error: line 4: zone: Input should be 'normal', 'blocked', 'restricted' or 'priority'`
@@ -221,7 +222,7 @@ The package `fly_in/` is split by responsibility:
 | Package | Role |
 |---|---|
 | `parse/` | Reads lines, splits declarations, validates each declaration and then the whole map (names, coordinates, connections, both hubs). |
-| `model/` | Immutable data: `Zone`, `Connection`, `MapGraph`, `Scenario`, the drone states `AtZone` and `InTransit`, and `MovementRules` (the legal moves of one drone). |
+| `model/` | Data models and rules: `Zone`, `Connection`, `MapGraph`, `Scenario`, the drone states `AtZone` and `InTransit`, and `MovementRules` (the legal moves of one drone). |
 | `pathfinding/` | `StaticDistance`, `SequentialFallback`, `SpaceTimePlanner`, `Reservation` and `Scheduler`. |
 | `simulation/` | `Simulator` and `StateHistory`: independent validation and the output lines. |
 | `rendering/` | The Tkinter viewer. It only displays a validated history. |
@@ -414,7 +415,7 @@ about `K·L·(V + 2E)` nodes, each with a heap operation. A scheduling run makes
 at most `8·K` planner calls plus the fallback plan. This is an upper bound;
 the heuristic and the deadline prune the search, but no running time or memory
 was measured for this project. The fallback plan alone stores about
-`K²·L` states, and the history holds one state per drone per turn, so
+`K²·L / 2` states, and the history holds one state per drone per turn, so
 memory grows at least linearly with the number of drones times the number of
 turns.
 
@@ -426,8 +427,9 @@ turns.
   change only tie-breaking, not the order.
 - The search may find no improvement and return the fallback plan, which takes
   `K·L` turns.
-- The early stop uses only the single-drone lower bound. On maps where
-  capacity is the real bottleneck, all 8 attempts run.
+- The early stop uses only the single-drone lower bound. Unless there is a
+  single drone, or the result happens to equal `d(start)`, all 8 attempts run,
+  even when the plan is already optimal.
 - Priority zones only break ties between equally fast routes. A priority zone
   is never chosen if it makes a drone arrive later.
 - The plan is made completely before anything is printed. There is no
@@ -639,31 +641,36 @@ when this README was written.
 ### AI Usage
 
 AI coding assistants (Anthropic's Claude, through Claude Code, and Codex)
-were used as development assistants during the project. The tasks and parts
-of the project were:
+were used as development assistants during the project. The work was divided
+as follows.
 
-- *Project organization and design notes*: proposed the separation of
-  responsibilities between parsing, data models, path-finding, simulation and
-  visual representation, drafted issue texts, and wrote comparison notes of
-  candidate algorithms (reservation-based A*, time-expanded flow, integer
-  programming and others) on which the algorithm decision was based.
-- *Implementation*: generated code for design units that the developer had
-  approved beforehand: the map parser and the Pydantic models, the drone
-  states, the reservation, planner, scheduler, simulator and fallback plan,
-  parts of the viewer, and their tests. Commits written with Claude carry a
-  `Co-Authored-By` line (about 40 of the 130 commits at the time of writing).
-  Assistance from other tools is not marked in the commits, so this number
-  does not show the full share of AI-assisted work.
-- *Verification tooling*: a development checker for the output and the
+- *Design and choice of the algorithm: led by the developer.* The developer
+  compared many approaches at length: static shortest paths with a separate
+  scheduler, reservation-based space-time A* (with and without time windows),
+  time-expanded flow, integer programming, and a joint search over all drones.
+  The criteria were conformity to the subject, the number of turns, computing
+  cost, implementation and debugging effort, and whether the developer could
+  understand and explain the method. AI assistants were used in this
+  discussion to organize and summarize the candidates and to write the
+  comparison notes. Every decision (the algorithm family, the capacity rules,
+  the fallback plan, the stopping rules, the behavior of the window) was taken
+  by the developer and recorded in writing before it was implemented.
+- *Detailed design and code: delegated to AI.* Within these approved designs,
+  AI wrote the detailed parts: the signatures and the inputs and outputs of the
+  functions and classes, and the code itself (the map parser and the Pydantic
+  models, the drone states, the reservation, planner, scheduler, simulator and
+  fallback plan, and the viewer), together with the unit tests. Commits written
+  with Claude carry a `Co-Authored-By` line (about 40 of the 130 commits at the
+  time of writing). Assistance from other tools is not marked in the commits,
+  so this number does not show the full share of AI-assisted work.
+- *Verification tooling.* A development checker for the output and the
   submission, which is not submitted, and its tests were audited and extended
   with AI assistance against the subject.
-- *Documentation*: this README was drafted with AI assistance from the
-  current code, by running the program on the maps shown here and by running
-  the documented commands.
+- *Documentation.* This README was drafted with AI assistance from the current
+  code, by running the program on the maps shown here and by running the
+  documented commands.
 
-The design decisions (algorithm family, capacity rules, fallback, stopping
-rules, GUI behavior and so on) were proposed in discussion and adopted by the
-developer in writing. AI output was not treated as authoritative: generated
-code and text were checked against the subject and the actual behavior of the
-program, and responsibility for the final code remains with the project
-author.
+AI output was not treated as authoritative. The developer reads what the AI
+produced at the end of each piece of work, both code and text, and checks it
+against the subject and the actual behavior of the program. Responsibility for
+the final code remains with the project author.
