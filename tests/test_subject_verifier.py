@@ -49,6 +49,15 @@ class ReadmeVerifierTests(unittest.TestCase):
         self.check(self.README.replace("### AI Usage\nX\n", ""))
         self.check(self.README.replace("### AI Usage", "### How AI helped"))
 
+    def test_algorithm_and_visual_headings_are_not_fixed(self) -> None:
+        """Subject VIII asks for that content, not for these heading names."""
+        self.check(self.README.replace(
+            "## Algorithm and Implementation Strategy", "## Implementation"
+        ).replace("## Visual Representation", "## GUI"))
+        self.check(self.README.replace(
+            "## Algorithm and Implementation Strategy\nX\n", ""
+        ).replace("## Visual Representation\nX\n", ""))
+
     def test_first_line_is_required(self) -> None:
         """Require the exact italicized sentence on the first line."""
         for text in (

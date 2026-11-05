@@ -334,11 +334,10 @@ class SubjectVerifier:
         readme = re.sub(
             r"<!--[\s\S]*?-->", "", text,
         )
-        for heading in (
-            "Description", "Instructions",
-            "Algorithm and Implementation Strategy",
-            "Visual Representation", "Resources",
-        ):
+        # Subject VIII names only these sections; the algorithm and visual
+        # descriptions are required as content, not as heading names, and
+        # are left to human review.
+        for heading in ("Description", "Instructions", "Resources"):
             section = re.search(
                 rf"(?m)^## {heading}\s*\n([\s\S]*?)(?=^## |\Z)", readme
             )
