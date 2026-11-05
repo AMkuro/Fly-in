@@ -11,7 +11,8 @@ from fly_in.model.map_graph import MapGraph
 from fly_in.parse import FlyInMapParser
 from fly_in.parse.scenario_builder import ScenarioBuilder
 from tools.verify_subject import (
-    MovementVerifier, OPTIMUM_TURNS, SubjectVerifier, performance_note,
+    MovementVerifier, OPTIMUM_TURNS, SubjectVerifier, VerifierTimeout,
+    performance_note,
 )
 
 
@@ -43,6 +44,11 @@ class ReadmeVerifierTests(unittest.TestCase):
         first, rest = self.README.split("\n", 1)
         self.check(first.replace("*", "_") + "\n" + rest)
 
+    def test_ai_usage_heading_name_is_not_required(self) -> None:
+        """B2: only Resources content is required, not a heading name."""
+        self.check(self.README.replace("### AI Usage\nX\n", ""))
+        self.check(self.README.replace("### AI Usage", "### How AI helped"))
+
     def test_first_line_is_required(self) -> None:
         """Require the exact italicized sentence on the first line."""
         for text in (
@@ -59,7 +65,6 @@ class ReadmeVerifierTests(unittest.TestCase):
         """Reject missing headings and HTML-comment-only placeholders."""
         for text in (
             self.README.replace("## Instructions", "## Other"),
-            self.README.replace("### AI Usage", "### Other"),
             self.README.replace(
                 "## Description\nX", "## Description\n<!-- X -->"
             ),
@@ -220,6 +225,22 @@ class MovementVerifierTests(unittest.TestCase):
             ):
                 self.verifier.verify(output)
 
+    def test_idle_turn_is_not_judged_by_shortness(self) -> None:
+        """B5: a redundant all-wait line is legal; trailing ones are not."""
+        self.assertEqual(
+            self.verifier.verify("D1-a\n\nD1-end D2-a\nD2-end\n"), 4
+        )
+        with self.assertRaisesRegex(ValueError, "continues"):
+            self.verifier.verify("D1-a\nD1-end D2-a\nD2-end\n\n")
+
+    def test_only_sgr_colors_are_stripped(self) -> None:
+        """B6: other control sequences and extra stdout stay invalid."""
+        for output in (
+            "\x1b[2JD1-a\n", "D1-a\x1b[K\n", "D1-a\r\r\n", "\x07D1-a\n",
+        ):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                self.verifier.verify(output)
+
     def test_turn_count_and_ansi_colors(self) -> None:
         """Count turns, while allowing terminal color escape sequences."""
         output = "\x1b[32mD1-a\x1b[0m\nD1-end D2-a\nD2-end\n"
@@ -341,6 +362,43 @@ class StructureVerifierTests(unittest.TestCase):
             ValueError, "missing unreachable fixtures"
         ):
             self.unreachable("", Path(empty))
+
+    def test_timeout_is_unverified_not_a_violation(self) -> None:
+        """B7: a hang is reported as a timeout, never as a rule failure."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "fly-in.py").write_text("import time\ntime.sleep(30)\n")
+            with self.assertRaisesRegex(VerifierTimeout, "unverified"):
+                SubjectVerifier(root, timeout=0.5).check_unreachable()
+        self.assertFalse(issubclass(VerifierTimeout, ValueError))
+
+    def files(self, names: tuple[str, ...], makefile: str) -> None:
+        """Run the real root-file check on a temporary candidate."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in names:
+                (root / name).write_text("")
+            (root / "Makefile").write_text(makefile)
+            SubjectVerifier(root).check_files()
+
+    def test_only_subject_root_files_are_required(self) -> None:
+        """B3: requirements.txt/.flake8 are not Subject-mandated files."""
+        base = ("README.md", "fly-in.py", ".gitignore")
+        self.files(base, "install:\n\ttrue\n")
+        self.files(base + ("requirements.txt",),
+                   "install:\n\tpip install -r requirements.txt\n")
+        for missing in base:
+            with self.subTest(missing=missing), self.assertRaisesRegex(
+                ValueError, "missing root file"
+            ):
+                self.files(tuple(n for n in base if n != missing),
+                           "install:\n\ttrue\n")
+
+    def test_file_named_by_makefile_must_exist(self) -> None:
+        """B3: a dependency file the Makefile uses is still checked."""
+        with self.assertRaisesRegex(ValueError, "requirements.txt"):
+            self.files(("README.md", "fly-in.py", ".gitignore"),
+                       "install:\n\tpip install -r requirements.txt\n")
 
     def test_real_cli_reports_unreachable(self) -> None:
         """Integration: the shipped CLI satisfies the DEC-013 contract."""

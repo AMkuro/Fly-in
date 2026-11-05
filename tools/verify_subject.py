@@ -43,6 +43,10 @@ LINT_FLAGS = (
 NON_EXECUTING = {"echo", "printf", "true", ":", "#"}
 
 
+class VerifierTimeout(Exception):
+    """A command gave no result in time: unverified, not a rule violation."""
+
+
 def make_commands(expanded: str) -> list[list[str]]:
     """Split ``make -n`` output into command token lists.
 
@@ -196,18 +200,43 @@ class MovementVerifier:
 class SubjectVerifier:
     """Check repository structure and run the candidate on mandatory maps."""
 
-    def __init__(self, root: Path) -> None:
-        """Keep candidate execution isolated from development helpers."""
+    def __init__(self, root: Path, timeout: float = 20) -> None:
+        """Keep candidate execution isolated from development helpers.
+
+        ``timeout`` is a termination guard for candidate commands, not a
+        validity or performance threshold.
+        """
         self.root = root.resolve()
+        self.timeout = timeout
+
+    def run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        """Run a command in the candidate; a timeout means "unverified"."""
+        try:
+            return subprocess.run(
+                args, cwd=self.root, capture_output=True, text=True,
+                timeout=self.timeout,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise VerifierTimeout(
+                f"{' '.join(args[-2:])}: no result within {self.timeout}s "
+                "(unverified, not a rule violation)"
+            ) from error
 
     def check_files(self) -> None:
-        """Check that the required root files exist."""
-        for filename in (
-            "Makefile", "README.md", "requirements.txt", "fly-in.py",
-            ".gitignore", ".flake8",
-        ):
+        """Check the root files the Subject needs, plus Makefile inputs.
+
+        ``requirements.txt`` and ``.flake8`` are not Subject requirements;
+        only a requirements file the Makefile itself names must exist.
+        """
+        for filename in ("Makefile", "README.md", "fly-in.py", ".gitignore"):
             if not (self.root / filename).is_file():
                 raise ValueError(f"missing root file: {filename}")
+        makefile = (self.root / "Makefile").read_text()
+        for name in sorted(set(re.findall(
+            r"[\w./-]*requirements[\w.-]*\.txt", makefile
+        ))):
+            if not (self.root / name).is_file():
+                raise ValueError(f"Makefile names a missing file: {name}")
 
     def check_makefile(self) -> None:
         """Check the mandatory Makefile rules and the lint command."""
@@ -253,10 +282,7 @@ class SubjectVerifier:
         a tool reports errors (``|| true``, a skipped branch); the CI run of
         the real ``make lint`` is the authority for that.
         """
-        result = subprocess.run(
-            ["make", "-n", "lint", f"PYTHON={sys.executable}"],
-            cwd=self.root, capture_output=True, text=True, timeout=20,
-        )
+        result = self.run(["make", "-n", "lint", f"PYTHON={sys.executable}"])
         if result.returncode:
             raise ValueError(f"make -n lint failed: {result.stderr.strip()}")
         commands = make_commands(result.stdout)
@@ -278,9 +304,8 @@ class SubjectVerifier:
         if not paths:
             raise ValueError(f"missing unreachable fixtures: {directory}")
         for path in paths:
-            result = subprocess.run(
-                [sys.executable, str(self.root / "fly-in.py"), str(path)],
-                cwd=self.root, capture_output=True, text=True, timeout=20,
+            result = self.run(
+                [sys.executable, str(self.root / "fly-in.py"), str(path)]
             )
             if (
                 result.returncode != 1
@@ -319,8 +344,6 @@ class SubjectVerifier:
             )
             if section is None or not section[1].strip():
                 raise ValueError(f"empty README section: {heading}")
-        if "### AI Usage" not in readme:
-            raise ValueError("missing AI usage disclosure")
 
     def mandatory_cases(self) -> list[Path]:
         """List the mandatory maps and the bounded adversarial fixtures."""
@@ -342,9 +365,8 @@ class SubjectVerifier:
         """Run the CLI on one map and return its verified turn count."""
         parsed = FlyInMapParser().load(str(path))
         scenario = ScenarioBuilder().build(parsed)
-        result = subprocess.run(
-            [sys.executable, str(self.root / "fly-in.py"), str(path)],
-            cwd=self.root, capture_output=True, text=True, timeout=20,
+        result = self.run(
+            [sys.executable, str(self.root / "fly-in.py"), str(path)]
         )
         if result.returncode:
             raise ValueError(
@@ -391,6 +413,9 @@ def main() -> int:
     ):
         try:
             check()
+        except VerifierTimeout as error:
+            print(f"TIMEOUT {check.__name__}: {error}", file=sys.stderr)
+            failed = True
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             print(f"FAIL {check.__name__}: {error}", file=sys.stderr)
             failed = True
