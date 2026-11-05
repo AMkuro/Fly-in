@@ -6,10 +6,13 @@ import tkinter as tk
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
-from fly_in.model.map_data import Connection, MapData, Zone
+from fly_in.model.connection_model import Connection
+from fly_in.model.scenario import Scenario
+from fly_in.model.zone_model import Zone
 
 if TYPE_CHECKING:
     from fly_in.rendering.map_view import InspectTarget
+    from fly_in.rendering.turn_occupancy import TurnOccupancy
 
 
 class InspectorPanel(ttk.Frame):
@@ -34,7 +37,6 @@ class InspectorPanel(ttk.Frame):
         ("zone_type", "Zone type"),
         ("color", "Color"),
         ("capacity", "Capacity"),
-        ("line", "Line"),
         ("drones", "Drones"),
     )
 
@@ -79,41 +81,49 @@ class InspectorPanel(ttk.Frame):
     def show_target(
         self,
         target: "InspectTarget",
-        map_data: MapData,
-        snapshot: object | None = None,
+        scenario: Scenario,
+        occupancy: TurnOccupancy | None = None,
     ) -> None:
-        """Render the current data for ``target`` and remember that target."""
+        """Render the current data for ``target`` and remember that target.
+
+        ``occupancy`` supplies the drones of the displayed turn; without it no
+        drone is listed.
+        """
         self._last_target = target
         if target.kind == "zone":
-            zone = map_data.zones.get(target.identifier)
+            zone = scenario.graph.zones.get(target.identifier)
             if zone is None:
                 self.clear()
                 return
-            self.show_zone(zone, map_data)
+            drones = occupancy.zone_ids(zone.name) if occupancy else ()
+            self.show_zone(zone, scenario, drones)
             return
         if target.kind == "connection":
-            connection = self._connection_by_name(map_data, target.identifier)
+            connection = self._connection_by_name(scenario, target.identifier)
             if connection is None:
                 self.clear()
                 return
-            self.show_connection(connection)
+            drones = (
+                occupancy.connection_ids(connection.name) if occupancy else ()
+            )
+            self.show_connection(connection, drones)
             return
         self.clear()
 
     def refresh(
         self,
-        map_data: MapData,
-        snapshot: object | None = None,
+        scenario: Scenario,
+        occupancy: TurnOccupancy | None = None,
     ) -> None:
-        """Refresh the remembered target after a future snapshot change."""
+        """Refresh the remembered target after the displayed turn changes."""
         if self._last_target is None:
             return
-        self.show_target(self._last_target, map_data, snapshot)
+        self.show_target(self._last_target, scenario, occupancy)
 
     def show_zone(
         self,
         zone: Zone,
-        map_data: MapData,
+        scenario: Scenario,
         drone_ids: tuple[int, ...] = (),
     ) -> None:
         """Show static zone information and any supplied drone ids."""
@@ -126,8 +136,7 @@ class InspectorPanel(ttk.Frame):
                 "coordinates": f"({zone.x}, {zone.y})",
                 "zone_type": zone.zone_type.value,
                 "color": zone.color or "default",
-                "capacity": self._format_zone_capacity(zone, map_data),
-                "line": str(zone.line_number),
+                "capacity": self._format_zone_capacity(zone, scenario),
                 "drones": self._format_drone_ids(drone_ids),
             }
         )
@@ -146,7 +155,6 @@ class InspectorPanel(ttk.Frame):
                 "zone_type": "",
                 "color": "",
                 "capacity": str(connection.max_link_capacity),
-                "line": str(connection.line_number),
                 "drones": self._format_drone_ids(drone_ids),
             }
         )
@@ -163,7 +171,6 @@ class InspectorPanel(ttk.Frame):
                 "zone_type": "",
                 "color": "",
                 "capacity": "",
-                "line": "",
                 "drones": "",
             }
         )
@@ -184,10 +191,10 @@ class InspectorPanel(ttk.Frame):
 
     @staticmethod
     def _connection_by_name(
-        map_data: MapData, connection_name: str
+        scenario: Scenario, connection_name: str
     ) -> Connection | None:
         """Return the named connection from parsed map data."""
-        for connection in map_data.connections:
+        for connection in scenario.graph.connections:
             if connection.name == connection_name:
                 return connection
         return None
@@ -200,17 +207,17 @@ class InspectorPanel(ttk.Frame):
         return ", ".join(f"D{drone_id}" for drone_id in drone_ids)
 
     @staticmethod
-    def _format_zone_capacity(zone: Zone, map_data: MapData) -> str:
+    def _format_zone_capacity(zone: Zone, scenario: Scenario) -> str:
         """Return configured capacity text for the inspector."""
-        if InspectorPanel._is_start_or_end(zone, map_data):
+        if InspectorPanel._is_start_or_end(zone, scenario):
             if "max_drones" not in zone.model_fields_set:
                 return ""
         return str(zone.max_drones)
 
     @staticmethod
-    def _is_start_or_end(zone: Zone, map_data: MapData) -> bool:
+    def _is_start_or_end(zone: Zone, scenario: Scenario) -> bool:
         """Return whether ``zone`` is one of the two special hubs."""
         return zone.name in {
-            map_data.start_hub_name,
-            map_data.end_hub_name,
+            scenario.start_name,
+            scenario.end_name,
         }
