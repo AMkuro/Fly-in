@@ -474,7 +474,7 @@ class MapView(ttk.Frame):
                 )
         return None
 
-    def _on_resize(self, event: tk.Event) -> None:
+    def _on_resize(self, event: tk.Event[tk.Misc]) -> None:
         """Resize callback for ``<Configure>`` events from the Canvas."""
         canvas_size = (int(event.width), int(event.height))
         if canvas_size == self._last_canvas_size:
@@ -482,7 +482,7 @@ class MapView(ttk.Frame):
         self._last_canvas_size = canvas_size
         self.render_map()
 
-    def _on_pointer_motion(self, event: tk.Event) -> None:
+    def _on_pointer_motion(self, event: tk.Event[tk.Misc]) -> None:
         """Resolve the topmost hover target and call ``self._on_hover``."""
         target = None
         for item_id in reversed(self._canvas.find_withtag("current")):
@@ -495,7 +495,7 @@ class MapView(ttk.Frame):
         self._set_highlighted_target(target)
         self._on_hover(target)
 
-    def _on_pointer_leave(self, event: tk.Event) -> None:
+    def _on_pointer_leave(self, event: tk.Event[tk.Misc]) -> None:
         """Clear hover highlighting while leaving inspector content intact."""
         if self._hovered_target is None:
             return
