@@ -100,6 +100,7 @@ the standard output unless a complete, verified plan exists.
 
 | Situation | Message | Exit code |
 |---|---|---|
+| Success: the plan was printed (or the window was opened and closed) | none | 0 |
 | Missing file, unreadable file, or invalid map | `Configuration error: <cause>`. Errors that belong to a line start with `line <N>:`. | 1 |
 | The end zone cannot be reached from the start zone | `Error: No path from start to end.` | 1 |
 | The scheduled plan fails the final simulation check (internal consistency failure) | `Configuration error: <cause>` | 1 |
