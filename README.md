@@ -414,8 +414,9 @@ number of drones. A search layer contains at most `V + 2E` states, and the
 deadline is at most `K·L − 1` turns, so one planner call expands at most
 about `K·L·(V + 2E)` nodes, each with a heap operation. A scheduling run makes
 at most `8·K` planner calls plus the fallback plan. This is an upper bound;
-the heuristic and the deadline prune the search, but no running time or memory
-was measured for this project. The fallback plan alone stores about
+the heuristic and the deadline prune the search; measured times and memory
+are given in [Performance and Limitations](#running-time-and-memory). The
+fallback plan alone stores about
 `K²·L / 2` states, and the history holds one state per drone per turn, so
 memory grows at least linearly with the number of drones times the number of
 turns.
@@ -438,7 +439,9 @@ turns.
 - The output order for equal alternatives depends on these tie-breaking rules.
   It is the same on every run: the seeds are fixed, and the outputs of all ten
   distributed maps were identical on repeated runs and on Python 3.10 and 3.14.
-- Very large drone counts and unknown maps were not tested.
+- On congested maps the running time grows quickly with the number of drones
+  (about 50 s for 400 drones on `capacity hell`); more than 400 drones and
+  unknown large maps were not tested.
 
 ## Visual Representation
 
@@ -595,10 +598,41 @@ plans printed by this program.
 `LB` and `K·L` are the bounds of [Bounds on the number of turns](#bounds-on-the-number-of-turns),
 computed by the program for each map.
 
-The turn counts were measured on commit `b5bca91` by replaying the printed
+The turn counts were measured on commit `f454f1b` by replaying the printed
 output with a separate checker that applies the subject's movement and
 capacity rules and counts the turns. That checker is a development tool, is
 not part of the submission, and shares the map parser with the program.
+
+### Running time and memory
+
+Measured on commit `f454f1b`, on an Apple M4 with 16 GB of memory, macOS and
+Python 3.14.10, one run at a time. The time is the wall-clock time of the whole
+command `python3 fly-in.py <map>` (interpreter start-up included), and the
+memory is the peak resident set size of that process. For the distributed maps
+the time is the median of 3 runs; every other run below was made once. Every
+printed plan was replayed by the checker and found legal.
+
+On the ten distributed maps, each run took at most 0.27 s and peaked at about
+34 MB; most of this is the start-up of the interpreter and `pydantic`.
+
+To see how the program scales, the number of drones of four distributed maps
+was changed (the maps themselves are unchanged):
+
+| Map | 50 drones | 100 drones | 200 drones | 400 drones |
+|---|---|---|---|---|
+| easy / 02 simple fork | 0.22 s | 0.31 s | 0.61 s | 1.72 s |
+| medium / 03 priority puzzle | 0.25 s | 0.36 s | 0.78 s | 2.33 s |
+| hard / 02 capacity hell | 1.17 s | 3.60 s | 12.75 s | 50.01 s |
+| challenger / 01 the impossible dream | 0.40 s | 0.70 s | 1.60 s | 4.58 s |
+
+At 400 drones the peak memory was between 39 MB and 56 MB. On `capacity hell`
+the time grew by a factor of about 3.5 to 4 each time the number of drones
+doubled, which is close to quadratic growth, so hundreds of drones on a
+congested map take tens of seconds. For these changed maps the optimum is not
+known, so their number of turns is not compared with one.
+
+For larger maps, a 20×20 grid with 30 drones took 1.1 s (52 turns), and a chain
+of 500 zones with 10 drones took 0.9 s (508 turns).
 
 What this does and does not show:
 
@@ -606,8 +640,8 @@ What this does and does not show:
   commit. It does not guarantee the optimum for other maps. The evaluation
   maps may be different from the distributed ones.
 - The algorithm is a heuristic (see [Known limitations](#known-limitations)).
-- No running time or memory use was measured, so none is claimed.
-- Not tested: very large numbers of drones and large maps.
+- The times and memory above depend on the machine; they are measurements, not
+  guarantees. Runs with more than 400 drones were not made.
 - The window is not covered by an automated check of its appearance, and
   whether the code meets the object-oriented requirement is left to the peer
   evaluation.
