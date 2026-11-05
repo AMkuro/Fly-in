@@ -629,8 +629,8 @@ when this README was written.
   IJCAI 2011: background on why a fixed order of planning is incomplete.
 - Jingjin Yu and Steven M. LaValle, [*Multi-agent Path Planning and Network Flow*](https://arxiv.org/abs/1204.5717)
   and [*Planning Optimal Paths for Multiple Robots on Graphs*](https://arxiv.org/abs/1204.3830):
-  read when comparing alternatives (time-expanded flow and integer
-  programming). These methods were not adopted.
+  read when comparing alternatives (time-expanded flow and integer linear
+  programming, ILP). These methods were not adopted.
 - Python documentation: [`heapq`](https://docs.python.org/3.10/library/heapq.html),
   [`tkinter`](https://docs.python.org/3.10/library/tkinter.html);
   [Pydantic](https://docs.pydantic.dev/latest/), [mypy](https://mypy.readthedocs.io/en/stable/),
@@ -647,7 +647,8 @@ as follows.
 - *Design and choice of the algorithm: led by the developer.* The developer
   compared many approaches at length: static shortest paths with a separate
   scheduler, reservation-based space-time A* (with and without time windows),
-  time-expanded flow, integer programming, and a joint search over all drones.
+  time-expanded flow, integer linear programming (ILP), and a joint search
+  over all drones.
   The criteria were conformity to the subject, the number of turns, computing
   cost, implementation and debugging effort, and whether the developer could
   understand and explain the method. AI assistants were used in this
