@@ -122,7 +122,7 @@ $$
 
 `U_e(t)`は**Connection容量の判定用利用量**であり、Connection上にターン終了時に残る機体数そのものではない。合法なrestricted移動では、Connection上にいる全機体は次ターンに必ず到着するため`F_e(t)=B_e(t)`。その条件下に限って`S_e(t)+N_e(t)\le C_e`と簡約できる。機体別の強制到着チェックをこの簡約によって省略してはならない。
 
-既存の[開発用検証器](../tools/verify_subject.py)はrestricted移動を到着ターンにも利用数へ加算する。この挙動はSubject v2.0 VII.3と上記契約に矛盾し、[T09](https://github.com/AMkuro/Fly-in/issues/5)で監査する。本体・検証器が承認式に対応済みだとは扱わない。
+[開発用検証器](../tools/verify_subject.py)は、Connectionを新たに使い始める機体だけを利用数に数え、restricted到着ターンの機体は数えない（強制到着は機体別に検査する）。検証器が上記契約に対応していても、本体が対応済みだとは扱わない。
 
 #### ターン・全スケジュールの合法性
 
