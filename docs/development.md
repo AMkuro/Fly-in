@@ -130,7 +130,9 @@ done by a person.
 
 Settings the workflow relies on (check them, they are not changed by code):
 Actions may create pull requests (repository setting *Allow GitHub Actions to
-create and approve pull requests*); the `release` environment may be given
+create and approve pull requests*; if it is off, the branch is still pushed
+and the job summary gives the compare link and the PR text so that a person
+opens the PR); the `release` environment may be given
 required reviewers to gate the publish job; the ruleset *Protect release
 branch* on `main` stays active. A PR opened with `GITHUB_TOKEN` does not start
 the usual `pull_request` workflows, so the verification of the candidate is the
