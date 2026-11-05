@@ -18,6 +18,8 @@ from fly_in.model.scenario import Scenario
 from fly_in.model.zone_model import Zone, ZoneType
 from fly_in.rendering.color_resolver import ColorResolver
 from fly_in.rendering.display_style import DisplayStyle
+from fly_in.rendering.drone_markers import MARKER_TAG, DroneMarkerDrawer
+from fly_in.rendering.turn_occupancy import TurnOccupancy
 from fly_in.rendering.viewport import MapBounds, Viewport
 
 
@@ -74,12 +76,14 @@ class MapView(ttk.Frame):
         self._hovered_target: InspectTarget | None = None
         self._highlighted_target: InspectTarget | None = None
         self._last_canvas_size: tuple[int, int] | None = None
+        self._occupancy: TurnOccupancy | None = None
 
         self._canvas = tk.Canvas(
             self,
             background=self._style.canvas_background,
             highlightthickness=0,
         )
+        self._markers = DroneMarkerDrawer(self._canvas, self._style)
         self._color_resolver = ColorResolver(
             self._canvas, default_color=self._style.default_zone_color
         )
@@ -91,7 +95,7 @@ class MapView(ttk.Frame):
         self.columnconfigure(0, weight=1)
 
     def render_map(self) -> None:
-        """Redraw the complete static map."""
+        """Redraw the map, with the current turn's drones if one is set."""
         self._canvas.delete("all")
         self._target_items.clear()
         self._hovered_target = None
@@ -101,12 +105,12 @@ class MapView(ttk.Frame):
         self._fit_viewport(zones)
         self._draw_graph(zones, self._scenario.graph.connections)
 
-    def show_snapshot(self, snapshot: object) -> None:
-        """Display a future simulation snapshot on top of the static map.
+    def show_snapshot(self, occupancy: TurnOccupancy) -> None:
+        """Draw one confirmed turn state ``S_t`` on top of the map.
 
-        Snapshot-specific drawing is not available yet, so the current GUI
-        falls back to the validated static network view.
+        The occupancy is kept so a window resize redraws the same turn.
         """
+        self._occupancy = occupancy
         self.render_map()
 
     def _fit_viewport(self, zones: list[Zone]) -> None:
@@ -138,6 +142,43 @@ class MapView(ttk.Frame):
         for zone in zones:
             self._draw_zone(zone, zone_points[zone.name])
         self._raise_zone_layer()
+        self._draw_drones(zones, connections, zone_points)
+
+    def _draw_drones(
+        self,
+        zones: list[Zone],
+        connections: Sequence[Connection],
+        zone_points: dict[str, CanvasPoint],
+    ) -> None:
+        """Draw markers for the current turn above every other item."""
+        if self._occupancy is None:
+            return
+        for zone in zones:
+            point = zone_points[zone.name]
+            self._markers.draw_in_zone(
+                point.x,
+                point.y,
+                self._occupancy.zone_ids(zone.name),
+                self._target_tags("zone", zone.name),
+                arrived=zone.name == self._scenario.end_name,
+            )
+        for connection in connections:
+            start = zone_points[connection.a]
+            end = zone_points[connection.b]
+            self._markers.draw_on_connection(
+                (start.x, start.y),
+                (end.x, end.y),
+                self._occupancy.connection_ids(connection.name),
+                self._target_tags("connection", connection.name),
+            )
+        self._canvas.tag_raise(MARKER_TAG)
+
+    def _usage_text(
+        self, drone_ids: tuple[int, ...] | None, limit: int
+    ) -> str:
+        """Return ``cap used/limit``; ``X`` while no turn is displayed."""
+        used = "X" if drone_ids is None else str(len(drone_ids))
+        return f"cap {used}/{limit}"
 
     def _canvas_points_for(self, zones: list[Zone]) -> dict[str, CanvasPoint]:
         """Convert every zone position to Canvas coordinates once."""
@@ -167,7 +208,12 @@ class MapView(ttk.Frame):
         self._draw_label(
             label_x,
             label_y,
-            text=f"cap X/{connection.max_link_capacity}",
+            text=self._usage_text(
+                None
+                if self._occupancy is None
+                else self._occupancy.connection_ids(connection.name),
+                connection.max_link_capacity,
+            ),
             fill=self._style.connection_label_color,
             font=("TkDefaultFont", 9),
             tags=tags,
@@ -274,7 +320,12 @@ class MapView(ttk.Frame):
         self._draw_label(
             center.x,
             center.y - radius - self._style.zone_capacity_label_gap,
-            text=f"cap X/{zone.max_drones}",
+            text=self._usage_text(
+                None
+                if self._occupancy is None
+                else self._occupancy.zone_ids(zone.name),
+                zone.max_drones,
+            ),
             fill=self._style.zone_label_color,
             font=("TkDefaultFont", self._style.zone_detail_label_font_size),
             tags=tags,

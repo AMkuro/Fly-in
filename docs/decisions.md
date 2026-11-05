@@ -410,3 +410,30 @@
 - 理由: アルゴリズムの骨格と責務境界は既に確定・実装され、残っている項目は性能・探索多様性の調整である。具体パラメータまでT03の完了条件にすると、実測によって変更すべき局所調整が上流の方式選定を不必要にブロックする。
 - 承認根拠: 2026-11-03 JST、開発者がPlanner/Scheduler/Reservation/Simulationを実行順に読解し、探索多様性・混雑tie-break・逐次計画の限界を確認したうえで、T03はアルゴリズムの核心をまとめて扱ったことが妥当との認識を示し、続けて「他の閉じれるIssueも閉じて」と指示した。具体的性能最適化は後続Issueへ分離する。
 - 現行契約: [T03探索基準方式](architecture.md#t03-pathfinding-policy)。
+
+<a id="dec-039"></a>
+
+## DEC-039 — T11は既存Tkinter GUIで検証済みStateHistoryの離散ターン状態を表示する
+
+- 結論・状態: 可視化方式として既存のTkinter GUIを採用し、色付き端末表示は追加実装しない（`ACCEPTED`）。**設計判断の承認のみで、実装・検証は未完了**。GUIの全面再作成や別フレームワークへの移行はしない。既存の`ViewerApp`・`MapView`・`PlaybackController`・`PlaybackControls`・`InspectorPanel`・`Viewport`を活用する。
+- データと責務: GUIはPlanを解釈せず、Simulatorが生成した`StateHistory`だけを読む。描画単位は`StateHistory.states[t]`の`TurnState`とし、新しい`TurnSnapshot`等のDTOは原則追加しない（必要になれば理由と契約への影響を示して別途承認を得る）。GUIのためにSolver・Simulationの合法性判定や共有状態契約を変更しない。責務分担は[DEC-028](#dec-028)・[DEC-037](#dec-037)を維持する。
+- 表示時刻: 離散ターンの確定状態`S_t`（`S_0`初期、`S_t`は第tターン終了後、`S_T`は全Drone到着後）を表示する。ターン途中のアニメーションや連続時間の位置補間は実装しない。
+- Droneの描画: `AtZone(zone)`はそのZone上、`InTransit(from_zone, to_zone)`は対応するConnection上（中点を基本位置とし、複数機の重なりを避ける表示を検討）にmarkerを置く。Drone IDは`StateHistory`の契約に従う。到着済みDroneは内部で`AtZone(end)`のままなので、GUIでも到着済みとして表現する。
+- 使用量表示の意味: Zoneの`cap X/N`のXは表示中の`S_t`で`AtZone`にいる機体数、Connectionの`cap X/N`のXは`S_t`で`InTransit`にいる機体数（両方向を合算）。これはSimulationの容量判定量`U_e(t)`（[DEC-012](#dec-012)）とは別物であり混同しない。restrictedから退出するターンに別機が同じConnectionへ進入できるのは、離散時間の同時状態遷移であり、物理的な瞬間重複や連続時間アニメーションは仮定しない。normalの1ターン移動はターン終了時に到着済みなのでConnection上には描画されない。start/endのZone容量はSubject v2.0に従い無制限として扱い、誤解を招く容量表示を避ける。
+- Playback: 自動再生中はPauseのみ有効、停止中はContinue・Step・Restartが有効でPauseは無効。`PlaybackController`は`is_playing`が真の間、**手動Stepを拒否**する。ただし自動再生タイマー内部の進行は拒否せず、手動操作と内部進行を区別する。ウィンドウ終了時は予約済みの`tk.after()`をキャンセルする。再生終了後は`S_T`を表示したまま自動停止する。
+- 表示資産: 既存の色・Zone typeの視覚表現・Canvas描画・Inspector・Viewportを再利用する。ウィンドウのリサイズで表示中のターンを失わない。
+- 理由: 既存GUI部品が揃っており、色付き端末表示を新規に作るより実装負荷が小さく、Subject v2.0の可視化要件を満たせる。検証済み履歴を直接読めば、表示が探索・合法性を決めない境界（[DEC-037](#dec-037)）を保てる。
+- 旧判断との関係: [DEC-024](#dec-024)の「検証済みStateHistoryを表示する」を維持し、[DEC-037](#dec-037)がT11へ移管した最終表示方式の選択をGUI採用として確定する。
+- 承認根拠: 2026-11-04 JST、開発者がT11の設計判断（上記）を合意済みとして記録・実装着手を指示した。
+- 現行契約: [T11の表示契約](architecture.md#t11-visualization-contract)。実装の進捗と未実装項目は[T11 / #11](https://github.com/AMkuro/Fly-in/issues/11)で管理する。
+
+<a id="dec-040"></a>
+
+## DEC-040 — T11の表示用集計に読み取り専用の`TurnOccupancy`を追加する
+
+- 結論・状態: [DEC-039](#dec-039)が「必要になれば理由と契約への影響を示して別途承認」としていた表示用の追加型として、`fly_in/rendering/turn_occupancy.py`の`TurnOccupancy`を認める（`ACCEPTED`）。DEC-039の内容は変更しない。
+- 内容: 1つの`TurnState` `S_t`を、Zone名ごと・Connection名ごとのDrone ID（1始まり・昇順）へ並べ替える凍結dataclass。`InTransit`は無向の`graph.connection_between`で名前を引き、逆向きも同じConnectionにまとめる。
+- 契約への影響: なし。`StateHistory`・Solver・Simulationの契約は変更せず、`TurnOccupancy`は描画側（`MapView`・`InspectorPanel`）だけが読む。合法性判定・容量判定はせず、Reservation / Simulationへ渡さない。`cap X/N`のXは[DEC-039](#dec-039)の定義のまま。
+- 理由: マーカー配置・`cap X/N`・Inspector一覧が同じ集計を必要とする。型を置かないと各描画部品が`TurnState`の走査と無向Connectionの名前解決を重複して持つ。Tk非依存なので単体テストできる。
+- 承認根拠: 2026-11-04 JST、PR #31のCodexレビュー（P1）を受け、開発者が`TurnOccupancy`の内容（`TurnState`をZone / Connection別のDrone IDへ並べ替えるだけ）を確認し、「責務分離ができているならいいよ」と承認した。
+- 現行契約: [T11の表示契約](architecture.md#t11-visualization-contract)。実装は[PR #31](https://github.com/AMkuro/Fly-in/pull/31)。

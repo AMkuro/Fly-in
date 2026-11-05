@@ -12,6 +12,8 @@ try:
     import tkinter as tk
 
     from fly_in.rendering.inspector_panel import InspectorPanel
+    from fly_in.rendering.map_view import InspectTarget
+    from fly_in.rendering.turn_occupancy import TurnOccupancy
 except ModuleNotFoundError as error:
     if error.name not in {"tkinter", "_tkinter"}:
         raise
@@ -74,3 +76,32 @@ class InspectorTests(unittest.TestCase):
                     "zone_type": "", "color": "", "capacity": capacity,
                     "drones": "none",
                 })
+
+    def test_target_lists_current_drones_and_follows_the_turn(self) -> None:
+        """Show who is there now, and re-show the target after a turn."""
+        first = TurnOccupancy({"A": (1,)}, {"B-middle": (2, 3)})
+        later = TurnOccupancy({"A": (), "B": (1, 2, 3)}, {})
+        cases = (
+            (InspectTarget("zone", "A"), first, "D1"),
+            (InspectTarget("connection", "B-middle"), first, "D2, D3"),
+        )
+        for target, occupancy, expected in cases:
+            with self.subTest(target=target), patch.object(
+                self.panel, "_set_fields"
+            ) as fields:
+                self.panel.show_target(target, self.scenario, occupancy)
+                self.assertEqual(
+                    fields.call_args.args[0]["drones"], expected
+                )
+        with patch.object(self.panel, "_set_fields") as fields:
+            self.panel.show_target(
+                InspectTarget("zone", "A"), self.scenario, first
+            )
+            self.panel.refresh(self.scenario, later)
+        self.assertEqual(fields.call_args.args[0]["drones"], "none")
+
+    def test_target_without_occupancy_lists_no_drones(self) -> None:
+        """Do not invent drones before any turn is shown."""
+        with patch.object(self.panel, "_set_fields") as fields:
+            self.panel.show_target(InspectTarget("zone", "A"), self.scenario)
+        self.assertEqual(fields.call_args.args[0]["drones"], "none")
